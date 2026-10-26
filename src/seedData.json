@@ -1,0 +1,787 @@
+{
+  "INITIAL_CONTACTS": [
+    {
+      "id": "c1",
+      "name": "Valeria Gómez",
+      "avatar": "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&auto=format&fit=crop&q=80",
+      "handle": "+57 310 892 4410",
+      "phone": "+57 310 892 4410",
+      "email": "valeria.gomez@empresa.co",
+      "channel": "whatsapp",
+      "tags": [
+        "Alta Intención",
+        "Cotización SaaS",
+        "VIP"
+      ],
+      "sentiment": "positive",
+      "leadScore": 92,
+      "stage": "negotiation",
+      "dealValue": 2400,
+      "notes": "Interesada en plan empresarial para 15 usuarios. Solicitó descuento de pago anual.",
+      "lastActive": "Hace 5 min",
+      "location": "Bogotá, Colombia",
+      "company": "Innovatech Latin America",
+      "interactions": {
+        "firstReply": true,
+        "appointmentConfirmed": true,
+        "proposalSent": true,
+        "dealClosed": false
+      }
+    },
+    {
+      "id": "c2",
+      "name": "Carlos Mendoza",
+      "avatar": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80",
+      "handle": "@carlos_mendoza_tech",
+      "email": "carlos@mendozadesign.com",
+      "channel": "instagram",
+      "tags": [
+        "E-Commerce",
+        "Interés Promociones"
+      ],
+      "sentiment": "neutral",
+      "leadScore": 68,
+      "stage": "qualified",
+      "dealValue": 850,
+      "notes": "Preguntó por integración con Shopify e Instagram Shopping.",
+      "lastActive": "Hace 12 min",
+      "location": "Ciudad de México, México",
+      "company": "Mendoza Studio",
+      "interactions": {
+        "firstReply": true,
+        "appointmentConfirmed": false,
+        "proposalSent": false,
+        "dealClosed": false
+      }
+    },
+    {
+      "id": "c3",
+      "name": "Sofia Alarcón (@sofia_tech)",
+      "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80",
+      "handle": "@sofia_tech",
+      "email": "sofia@startupx.io",
+      "channel": "twitter",
+      "tags": [
+        "API Integration",
+        "DevOps",
+        "Sugerencia"
+      ],
+      "sentiment": "urgent",
+      "leadScore": 85,
+      "stage": "lead",
+      "dealValue": 1200,
+      "notes": "Necesita webhook personalizado para recibir eventos en su backend Express.",
+      "lastActive": "Hace 25 min",
+      "location": "Santiago, Chile",
+      "company": "StartupX",
+      "interactions": {
+        "firstReply": false,
+        "appointmentConfirmed": false,
+        "proposalSent": false,
+        "dealClosed": false
+      }
+    },
+    {
+      "id": "c4",
+      "name": "Mateo Rossi",
+      "avatar": "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&auto=format&fit=crop&q=80",
+      "handle": "+54 9 11 4521 8820",
+      "phone": "+54 9 11 4521 8820",
+      "email": "mateo.rossi@argenfood.ar",
+      "channel": "whatsapp",
+      "tags": [
+        "Cliente Existente",
+        "Renovación"
+      ],
+      "sentiment": "positive",
+      "leadScore": 98,
+      "stage": "closed_won",
+      "dealValue": 4500,
+      "notes": "Cliente renovó contrato anual de CRM Social omnicanal.",
+      "lastActive": "Hace 1 hora",
+      "location": "Buenos Aires, Argentina",
+      "company": "ArgenFood Corp",
+      "interactions": {
+        "firstReply": true,
+        "appointmentConfirmed": true,
+        "proposalSent": true,
+        "dealClosed": true
+      }
+    },
+    {
+      "id": "c5",
+      "name": "Elena Rostova",
+      "avatar": "https://images.unsplash.com/photo-1517841905240-472988babdf9?w=150&auto=format&fit=crop&q=80",
+      "handle": "elena.rostova",
+      "email": "elena@fashionbrand.es",
+      "channel": "messenger",
+      "tags": [
+        "Soporte Tarde",
+        "Queja Envíos"
+      ],
+      "sentiment": "churn_risk",
+      "leadScore": 35,
+      "stage": "closed_lost",
+      "dealValue": 300,
+      "notes": "Presentó dudas sobre los tiempos de respuesta fuera de horario laboral.",
+      "lastActive": "Hace 3 horas",
+      "location": "Madrid, España",
+      "company": "FashionBrand ES",
+      "interactions": {
+        "firstReply": false,
+        "appointmentConfirmed": false,
+        "proposalSent": false,
+        "dealClosed": false
+      }
+    }
+  ],
+  "INITIAL_USERS": [
+    {
+      "id": "u1",
+      "name": "Bob Smith",
+      "email": "bob@example.com",
+      "password": "Bob2309231312",
+      "role": "Administrador",
+      "avatar_url": "dsadasdasdasdsads"
+    }
+  ],
+  "INITIAL_MESSAGES": {
+    "conv_c1": [
+      {
+        "id": "m1",
+        "conversationId": "conv_c1",
+        "sender": "contact",
+        "text": "¡Hola! Vi que ofrecen integración con WhatsApp Business e IA para respuestas rápidas. ¿Tienen planes empresariales para 15 agentes?",
+        "timestamp": "10:30 AM",
+        "channel": "whatsapp",
+        "status": "read"
+      },
+      {
+        "id": "m2",
+        "conversationId": "conv_c1",
+        "sender": "agent",
+        "senderName": "Asistente SocialSync",
+        "text": "¡Hola Valeria! Sí, por supuesto. Nuestro plan Enterprise incluye usuarios ilimitados, motor de IA en tiempo real y webhook personalizado.",
+        "timestamp": "10:32 AM",
+        "channel": "whatsapp",
+        "status": "read"
+      },
+      {
+        "id": "m3",
+        "conversationId": "conv_c1",
+        "sender": "contact",
+        "text": "Excelente. ¿Pueden enviarme una propuesta formal con descuento por facturación anual? Queremos tomar la decisión esta misma semana.",
+        "timestamp": "10:35 AM",
+        "channel": "whatsapp",
+        "status": "read"
+      }
+    ],
+    "conv_c2": [
+      {
+        "id": "m10",
+        "conversationId": "conv_c2",
+        "sender": "contact",
+        "text": "Hola 👋 Vi sus historias en Instagram sobre la automatización de campañas. ¿Sirve para enviar DM automáticos cuando alguien comenta una publicación?",
+        "timestamp": "09:45 AM",
+        "channel": "instagram",
+        "status": "read"
+      },
+      {
+        "id": "m11",
+        "conversationId": "conv_c2",
+        "sender": "agent",
+        "senderName": "Bot Automatizado",
+        "text": "¡Hola Carlos! Totalmente. Puedes configurar triggers para disparar DMs automáticos con cupones o enlaces cuando comenten palabras clave.",
+        "timestamp": "09:46 AM",
+        "channel": "instagram",
+        "status": "read",
+        "aiGenerated": true
+      }
+    ],
+    "conv_c3": [
+      {
+        "id": "m20",
+        "conversationId": "conv_c3",
+        "sender": "contact",
+        "text": "Hey @SocialSync! Estoy probando su API personalizada. ¿Dónde encuentro la especificación OpenAPI/Swagger para descargar en GitHub y correr en Node.js?",
+        "timestamp": "08:15 AM",
+        "channel": "twitter",
+        "status": "read"
+      }
+    ]
+  },
+  "INITIAL_CONVERSATIONS": [
+    {
+      "id": "conv_c1",
+      "contactId": "c1",
+      "contact": {
+        "id": "c1",
+        "name": "Valeria Gómez",
+        "avatar": "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&auto=format&fit=crop&q=80",
+        "handle": "+57 310 892 4410",
+        "phone": "+57 310 892 4410",
+        "email": "valeria.gomez@empresa.co",
+        "channel": "whatsapp",
+        "tags": [
+          "Alta Intención",
+          "Cotización SaaS",
+          "VIP"
+        ],
+        "sentiment": "positive",
+        "leadScore": 92,
+        "stage": "negotiation",
+        "dealValue": 2400,
+        "notes": "Interesada en plan empresarial para 15 usuarios. Solicitó descuento de pago anual.",
+        "lastActive": "Hace 5 min",
+        "location": "Bogotá, Colombia",
+        "company": "Innovatech Latin America",
+        "interactions": {
+          "firstReply": true,
+          "appointmentConfirmed": true,
+          "proposalSent": true,
+          "dealClosed": false
+        }
+      },
+      "channel": "whatsapp",
+      "unreadCount": 1,
+      "lastMessage": "Excelente. ¿Pueden enviarme una propuesta formal con descuento por facturación anual?",
+      "lastMessageTime": "10:35 AM",
+      "status": "open",
+      "assignedAgent": "Alejandro Silva",
+      "summary": "Lead de alta intención solicita propuesta de Plan Enterprise para 15 agentes con pago anual."
+    },
+    {
+      "id": "conv_c2",
+      "contactId": "c2",
+      "contact": {
+        "id": "c2",
+        "name": "Carlos Mendoza",
+        "avatar": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80",
+        "handle": "@carlos_mendoza_tech",
+        "email": "carlos@mendozadesign.com",
+        "channel": "instagram",
+        "tags": [
+          "E-Commerce",
+          "Interés Promociones"
+        ],
+        "sentiment": "neutral",
+        "leadScore": 68,
+        "stage": "qualified",
+        "dealValue": 850,
+        "notes": "Preguntó por integración con Shopify e Instagram Shopping.",
+        "lastActive": "Hace 12 min",
+        "location": "Ciudad de México, México",
+        "company": "Mendoza Studio",
+        "interactions": {
+          "firstReply": true,
+          "appointmentConfirmed": false,
+          "proposalSent": false,
+          "dealClosed": false
+        }
+      },
+      "channel": "instagram",
+      "unreadCount": 0,
+      "lastMessage": "¡Hola Carlos! Totalmente. Puedes configurar triggers para disparar DMs automáticos...",
+      "lastMessageTime": "09:46 AM",
+      "status": "open",
+      "assignedAgent": "Bot de Instagram",
+      "summary": "Consulta sobre respuestas automáticas a comentarios de Instagram y captura de leads."
+    },
+    {
+      "id": "conv_c3",
+      "contactId": "c3",
+      "contact": {
+        "id": "c3",
+        "name": "Sofia Alarcón (@sofia_tech)",
+        "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80",
+        "handle": "@sofia_tech",
+        "email": "sofia@startupx.io",
+        "channel": "twitter",
+        "tags": [
+          "API Integration",
+          "DevOps",
+          "Sugerencia"
+        ],
+        "sentiment": "urgent",
+        "leadScore": 85,
+        "stage": "lead",
+        "dealValue": 1200,
+        "notes": "Necesita webhook personalizado para recibir eventos en su backend Express.",
+        "lastActive": "Hace 25 min",
+        "location": "Santiago, Chile",
+        "company": "StartupX",
+        "interactions": {
+          "firstReply": false,
+          "appointmentConfirmed": false,
+          "proposalSent": false,
+          "dealClosed": false
+        }
+      },
+      "channel": "twitter",
+      "unreadCount": 1,
+      "lastMessage": "Hey @SocialSync! Estoy probando su API personalizada. ¿Dónde encuentro la especificación...",
+      "lastMessageTime": "08:15 AM",
+      "status": "pending",
+      "assignedAgent": "Soporte Developer",
+      "summary": "Consulta técnica de integración API REST y despliegue en servidor propio."
+    },
+    {
+      "id": "conv_c4",
+      "contactId": "c4",
+      "contact": {
+        "id": "c4",
+        "name": "Mateo Rossi",
+        "avatar": "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&auto=format&fit=crop&q=80",
+        "handle": "+54 9 11 4521 8820",
+        "phone": "+54 9 11 4521 8820",
+        "email": "mateo.rossi@argenfood.ar",
+        "channel": "whatsapp",
+        "tags": [
+          "Cliente Existente",
+          "Renovación"
+        ],
+        "sentiment": "positive",
+        "leadScore": 98,
+        "stage": "closed_won",
+        "dealValue": 4500,
+        "notes": "Cliente renovó contrato anual de CRM Social omnicanal.",
+        "lastActive": "Hace 1 hora",
+        "location": "Buenos Aires, Argentina",
+        "company": "ArgenFood Corp",
+        "interactions": {
+          "firstReply": true,
+          "appointmentConfirmed": true,
+          "proposalSent": true,
+          "dealClosed": true
+        }
+      },
+      "channel": "whatsapp",
+      "unreadCount": 0,
+      "lastMessage": "Pago de renovación anual recibido con éxito. Gracias por el soporte.",
+      "lastMessageTime": "Ayer",
+      "status": "resolved",
+      "assignedAgent": "Alejandro Silva",
+      "summary": "Cliente VIP completó renovación de contrato anual."
+    },
+    {
+      "id": "conv_c5",
+      "contactId": "c5",
+      "contact": {
+        "id": "c5",
+        "name": "Elena Rostova",
+        "avatar": "https://images.unsplash.com/photo-1517841905240-472988babdf9?w=150&auto=format&fit=crop&q=80",
+        "handle": "elena.rostova",
+        "email": "elena@fashionbrand.es",
+        "channel": "messenger",
+        "tags": [
+          "Soporte Tarde",
+          "Queja Envíos"
+        ],
+        "sentiment": "churn_risk",
+        "leadScore": 35,
+        "stage": "closed_lost",
+        "dealValue": 300,
+        "notes": "Presentó dudas sobre los tiempos de respuesta fuera de horario laboral.",
+        "lastActive": "Hace 3 horas",
+        "location": "Madrid, España",
+        "company": "FashionBrand ES",
+        "interactions": {
+          "firstReply": false,
+          "appointmentConfirmed": false,
+          "proposalSent": false,
+          "dealClosed": false
+        }
+      },
+      "channel": "messenger",
+      "unreadCount": 0,
+      "lastMessage": "Entendido, hablaré con mi equipo antes de decidir.",
+      "lastMessageTime": "Hace 3 días",
+      "status": "resolved",
+      "assignedAgent": "Soporte Ventas",
+      "summary": "Consulta resuelta sobre tiempos de respuesta en canal Messenger."
+    }
+  ],
+  "INITIAL_SEGMENTS": [
+    {
+      "id": "seg_1",
+      "name": "Leads WhatsApp Alta Intención",
+      "description": "Prospectos recibidos por WhatsApp con score superior a 70 y estado en Negociación.",
+      "channels": [
+        "whatsapp"
+      ],
+      "minScore": 70,
+      "stages": [
+        "negotiation",
+        "qualified"
+      ],
+      "tags": [
+        "Alta Intención"
+      ],
+      "contactCount": 142,
+      "createdAt": "2026-07-15"
+    },
+    {
+      "id": "seg_2",
+      "name": "Instagram E-Commerce & Creators",
+      "description": "Contactos provenientes de Instagram con interés en catálogos y ventas por DM.",
+      "channels": [
+        "instagram"
+      ],
+      "tags": [
+        "E-Commerce",
+        "Interés Promociones"
+      ],
+      "contactCount": 389,
+      "createdAt": "2026-07-20"
+    },
+    {
+      "id": "seg_3",
+      "name": "Desarrolladores & API Integrators (Twitter/X)",
+      "description": "Usuarios interesados en webhooks personalizados, GitHub export y API REST.",
+      "channels": [
+        "twitter"
+      ],
+      "tags": [
+        "API Integration",
+        "DevOps"
+      ],
+      "contactCount": 94,
+      "createdAt": "2026-08-01"
+    }
+  ],
+  "INITIAL_CAMPAIGN": [
+    {
+      "id": "camp_1",
+      "title": "Lanzamiento Módulo IA en WhatsApp",
+      "channel": "whatsapp",
+      "segmentId": "seg_1",
+      "segmentName": "Leads WhatsApp Alta Intención",
+      "content": "🚀 ¡Hola {nombre}! Automatiza el 80% de tus chats en WhatsApp con nuestro nuevo motor de IA Gemini. Activa tu prueba gratis de 14 días respondiendo \"IA NOW\".",
+      "imageUrl": "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=800&auto=format&fit=crop&q=80",
+      "status": "completed",
+      "sentCount": 1250,
+      "deliveredCount": 1242,
+      "openRate": 88.4,
+      "clickRate": 34.2,
+      "conversions": 184,
+      "createdAt": "2026-08-02"
+    },
+    {
+      "id": "camp_2",
+      "title": "Flash Sale Instagram DM Automation",
+      "channel": "instagram",
+      "segmentId": "seg_2",
+      "segmentName": "Instagram E-Commerce & Creators",
+      "content": "✨ ¡Atención Creadores! Consigue 30% OFF en el plan Social CRM anual. Responde a esta conversación con \"OFERTA30\" para enviarte el código único.",
+      "imageUrl": "https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=800&auto=format&fit=crop&q=80",
+      "status": "running",
+      "sentCount": 850,
+      "deliveredCount": 840,
+      "openRate": 76.5,
+      "clickRate": 28.1,
+      "conversions": 62,
+      "createdAt": "2026-08-08"
+    }
+  ],
+  "INITIAL_AUTOMATIONS": [
+    {
+      "id": "auto_1",
+      "name": "Auto-Respuesta Instantánea IA en WhatsApp",
+      "triggerEvent": "message_received",
+      "conditionChannel": "whatsapp",
+      "conditionKeyword": "Precio",
+      "actions": [
+        {
+          "type": "send_ai_reply",
+          "targetValue": "Generar respuesta con detalles de precios y agenda de demo."
+        },
+        {
+          "type": "add_tag",
+          "targetValue": "Interés Precios"
+        },
+        {
+          "type": "change_stage",
+          "targetValue": "qualified"
+        }
+      ],
+      "enabled": true,
+      "triggerCount": 342,
+      "lastTriggered": "Hace 10 min"
+    },
+    {
+      "id": "auto_2",
+      "name": "Webhook Evento Lead VIP a CRM Externo",
+      "triggerEvent": "stage_changed",
+      "actions": [
+        {
+          "type": "call_webhook",
+          "targetValue": "https://mi-servidor.com/api/webhooks/crm-leads"
+        },
+        {
+          "type": "add_tag",
+          "targetValue": "Sincronizado API"
+        }
+      ],
+      "enabled": true,
+      "triggerCount": 189,
+      "lastTriggered": "Hace 45 min"
+    },
+    {
+      "id": "auto_3",
+      "name": "Captura de Leads desde Twitter / X DMs",
+      "triggerEvent": "message_received",
+      "conditionChannel": "twitter",
+      "actions": [
+        {
+          "type": "add_tag",
+          "targetValue": "Lead Twitter"
+        },
+        {
+          "type": "assign_agent",
+          "targetValue": "Soporte Social Media"
+        }
+      ],
+      "enabled": true,
+      "triggerCount": 95,
+      "lastTriggered": "Hace 2 horas"
+    }
+  ],
+  "INITIAL_API_KEYS": [
+    {
+      "id": "key_1",
+      "name": "Prod Backend Node.js Key",
+      "createdAt": "2026-07-10",
+      "lastUsed": "Hace 2 minutos",
+      "permissions": [
+        "contacts:read",
+        "contacts:write",
+        "messages:send",
+        "webhooks:manage"
+      ]
+    },
+    {
+      "id": "key_2",
+      "name": "GitHub Repository Deployment Secret",
+      "createdAt": "2026-08-01",
+      "lastUsed": "Hace 1 hora",
+      "permissions": [
+        "full_access"
+      ]
+    },
+    {
+      "id": "key_frontend",
+      "name": "Frontend XIO (solo desarrollo local)",
+      "createdAt": "2026-08-26",
+      "lastUsed": "Nunca",
+      "permissions": [
+        "read",
+        "write"
+      ]
+    }
+  ],
+  "INITIAL_WEBHOOK": {
+    "id": "wh_1",
+    "url": "https://api.empresa.com/v1/socialcrm/events",
+    "secret": "whsec_88f920a11c094e1b8a9238e",
+    "events": [
+      "message.received",
+      "conversation.created",
+      "lead.stage_updated",
+      "campaign.completed"
+    ],
+    "active": true
+  },
+  "INITIAL_WEBHOOK_LOGS": [
+    {
+      "id": "log_1",
+      "timestamp": "2026-08-09 11:02:15",
+      "event": "message.received",
+      "statusCode": 200,
+      "payload": {
+        "channel": "whatsapp",
+        "contactId": "c1",
+        "sender": "Valeria Gómez",
+        "text": "Excelente. ¿Pueden enviarme..."
+      },
+      "durationMs": 142
+    },
+    {
+      "id": "log_2",
+      "timestamp": "2026-08-09 10:45:00",
+      "event": "lead.stage_updated",
+      "statusCode": 200,
+      "payload": {
+        "contactId": "c1",
+        "oldStage": "qualified",
+        "newStage": "negotiation",
+        "dealValue": 2400
+      },
+      "durationMs": 98
+    },
+    {
+      "id": "log_3",
+      "timestamp": "2026-08-09 09:12:30",
+      "event": "campaign.completed",
+      "statusCode": 200,
+      "payload": {
+        "campaignId": "camp_1",
+        "sent": 1250,
+        "openRate": 88.4
+      },
+      "durationMs": 210
+    }
+  ],
+  "INITIAL_ANALYTICS": {
+    "totalConversations": 4890,
+    "avgResponseTimeMin": 1.8,
+    "leadConversionRate": 24.5,
+    "campaignRoi": 410,
+    "channelBreakdown": [
+      {
+        "channel": "whatsapp",
+        "count": 2450,
+        "color": "#22c55e"
+      },
+      {
+        "channel": "instagram",
+        "count": 1320,
+        "color": "#e1306c"
+      },
+      {
+        "channel": "twitter",
+        "count": 620,
+        "color": "#1da1f2"
+      },
+      {
+        "channel": "messenger",
+        "count": 350,
+        "color": "#0084ff"
+      },
+      {
+        "channel": "email",
+        "count": 150,
+        "color": "#ea4335"
+      }
+    ],
+    "monthlyConversions": [
+      {
+        "month": "Mar",
+        "leads": 420,
+        "closed": 98
+      },
+      {
+        "month": "Abr",
+        "leads": 580,
+        "closed": 142
+      },
+      {
+        "month": "May",
+        "leads": 710,
+        "closed": 185
+      },
+      {
+        "month": "Jun",
+        "leads": 890,
+        "closed": 230
+      },
+      {
+        "month": "Jul",
+        "leads": 1120,
+        "closed": 295
+      },
+      {
+        "month": "Ago",
+        "leads": 1450,
+        "closed": 380
+      }
+    ],
+    "sentimentBreakdown": [
+      {
+        "sentiment": "Positivo",
+        "count": 3100,
+        "color": "#10b981"
+      },
+      {
+        "sentiment": "Neutral",
+        "count": 1250,
+        "color": "#6b7280"
+      },
+      {
+        "sentiment": "Urgente",
+        "count": 420,
+        "color": "#f59e0b"
+      },
+      {
+        "sentiment": "Riesgo Churn",
+        "count": 120,
+        "color": "#ef4444"
+      }
+    ]
+  },
+  "INITIAL_QUICK_REPLIES": [
+    {
+      "id": "qr_1",
+      "title": "Saludo WhatsApp",
+      "emoji": "⚡",
+      "text": "¡Hola {nombre}! Gracias por comunicarte con nosotros vía XIO. ¿En qué podemos asesorarte el día de hoy?",
+      "category": "saludo"
+    },
+    {
+      "id": "qr_2",
+      "title": "Catálogo & Precios",
+      "emoji": "💰",
+      "text": "Hola {nombre}, te adjunto nuestra tabla de planes y módulos de XIO. Los planes inician desde $15 USD/mes con usuarios y WhatsApp ilimitados.",
+      "imageUrl": "https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=800&auto=format&fit=crop&q=80",
+      "category": "precios"
+    },
+    {
+      "id": "qr_3",
+      "title": "Link Extensión Web",
+      "emoji": "🧩",
+      "text": "Aquí tienes el acceso directo para activar la Extensión XIO en tu WhatsApp Web: https://xio.app/extension-chrome",
+      "imageUrl": "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=800&auto=format&fit=crop&q=80",
+      "category": "ventas"
+    },
+    {
+      "id": "qr_4",
+      "title": "Agendar Demo Calendar",
+      "emoji": "📅",
+      "text": "Hola {nombre}, ¿te parece si agendamos una llamada de 15 minutos en Google Calendar para revisar tu caso y hacer una demo personalizada?",
+      "category": "ventas"
+    },
+    {
+      "id": "qr_5",
+      "title": "Datos de Pago / QR",
+      "emoji": "💳",
+      "text": "¡Excelente! Te comparto nuestros canales de pago oficiales para activar tu suscripción inmediatamente. Aceptamos Tarjetas, Transferencia Bancaria y PayPal.",
+      "imageUrl": "https://images.unsplash.com/photo-1556742049-0a67e55722c3?w=800&auto=format&fit=crop&q=80",
+      "category": "precios"
+    }
+  ],
+  "INITIAL_PRESET_IMAGES": [
+    {
+      "id": "preset_1",
+      "name": "Catálogo de Planes XIO",
+      "url": "https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=800&auto=format&fit=crop&q=80",
+      "type": "Precios / SaaS"
+    },
+    {
+      "id": "preset_2",
+      "name": "Banner Extensión WhatsApp",
+      "url": "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=800&auto=format&fit=crop&q=80",
+      "type": "Extensión Web"
+    },
+    {
+      "id": "preset_3",
+      "name": "Código QR / Datos de Pago",
+      "url": "https://images.unsplash.com/photo-1556742049-0a67e55722c3?w=800&auto=format&fit=crop&q=80",
+      "type": "Pasarela / QR"
+    },
+    {
+      "id": "preset_4",
+      "name": "Demostración de CRM en Vivo",
+      "url": "https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=800&auto=format&fit=crop&q=80",
+      "type": "Demo / Analytics"
+    }
+  ]
+}

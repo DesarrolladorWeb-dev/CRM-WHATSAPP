@@ -1,0 +1,8 @@
+{
+  "name": "whato-crm",
+  "displayName": "Whato",
+  "description": "Plataforma Omnicanal Whato de CRM y Ventas para WhatsApp Web con IA Gemini, persistencia MongoDB y arquitectura Full Stack Next.js.",
+  "framework": "nextjs",
+  "database": "mongodb",
+  "version": "1.0.0"
+}

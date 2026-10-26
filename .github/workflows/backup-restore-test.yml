@@ -1,0 +1,157 @@
+name: Prueba de restauracion de backups
+
+# "Un backup que nunca se intento restaurar no es una garantia real."
+#
+# Cada semana: descarga el ultimo dump de Postgres y de MongoDB del bucket,
+# los restaura en instancias efimeras levantadas dentro del propio job y
+# comprueba que los datos quedan ahi. Si algo falla, el workflow falla y
+# GitHub notifica -> el registro de pruebas de docs/DISASTER_RECOVERY.md
+# se actualiza con el resultado.
+#
+# Usa las MISMAS variables/secrets del bucket que .github/workflows/backup.yml
+# (BACKUP_S3_* + BACKUP_S3_ACCESS_KEY_ID / BACKUP_S3_SECRET_ACCESS_KEY).
+# NO usa DATABASE_URL / MONGODB_URI de produccion: restaura contra contenedores
+# desechables, nunca toca datos reales.
+
+on:
+  schedule:
+    - cron: '42 4 * * 1' # lunes, 04:42 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  restore-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: whato
+          POSTGRES_PASSWORD: whato
+          POSTGRES_DB: whato_restore_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U whato"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      mongo:
+        image: mongo:7
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.runCommand({ ping: 1 }).ok' || exit 1"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      # Instancias efimeras del propio job, NO produccion.
+      DATABASE_URL: postgresql://whato:whato@localhost:5432/whato_restore_test
+      MONGODB_URI: mongodb://localhost:27017/whato_restore_test
+      AWS_ACCESS_KEY_ID: ${{ secrets.BACKUP_S3_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.BACKUP_S3_SECRET_ACCESS_KEY }}
+      AWS_DEFAULT_REGION: ${{ vars.BACKUP_S3_REGION }}
+      BACKUP_S3_BUCKET: ${{ vars.BACKUP_S3_BUCKET }}
+      BACKUP_S3_ENDPOINT: ${{ vars.BACKUP_S3_ENDPOINT }}
+      BACKUP_S3_PREFIX: ${{ vars.BACKUP_S3_PREFIX || 'whato-crm' }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      # scripts/restore.mjs solo usa modulos nativos de Node, no hace falta npm ci.
+
+      - name: Instalar clientes de base de datos (pg_restore 17 + mongorestore + mongosh)
+        run: |
+          set -euo pipefail
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsS -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \
+            https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
+            | sudo tee /etc/apt/sources.list.d/pgdg.list > /dev/null
+          curl -fsSL https://www.mongodb.org/static/pgp/server-8.0.asc \
+            | sudo gpg --dearmor -o /usr/share/keyrings/mongodb-server-8.0.gpg
+          echo "deb [signed-by=/usr/share/keyrings/mongodb-server-8.0.gpg] https://repo.mongodb.org/apt/ubuntu $(lsb_release -cs)/mongodb-org/8.0 multiverse" \
+            | sudo tee /etc/apt/sources.list.d/mongodb-org-8.0.list > /dev/null
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client-17 mongodb-database-tools mongodb-mongosh
+          pg_restore --version
+          mongorestore --version
+          mongosh --version
+
+      - name: Descargar el backup mas reciente del bucket
+        run: |
+          set -euo pipefail
+          [ -n "${BACKUP_S3_BUCKET:-}" ] || { echo 'Falta la variable BACKUP_S3_BUCKET'; exit 1; }
+          endpoint_arg=()
+          [ -n "${BACKUP_S3_ENDPOINT:-}" ] && endpoint_arg=(--endpoint-url "$BACKUP_S3_ENDPOINT")
+          src="s3://${BACKUP_S3_BUCKET}/${BACKUP_S3_PREFIX}"
+          mkdir -p backups
+          pg=$(aws "${endpoint_arg[@]}" s3 ls "$src/" | awk '{print $4}' | grep -E '^postgres_.*\.dump$' | sort | tail -n1 || true)
+          mg=$(aws "${endpoint_arg[@]}" s3 ls "$src/" | awk '{print $4}' | grep -E '^mongo_.*\.archive\.gz$' | sort | tail -n1 || true)
+          [ -n "$pg" ] || { echo 'No hay dumps de Postgres en el bucket'; exit 1; }
+          [ -n "$mg" ] || { echo 'No hay dumps de MongoDB en el bucket'; exit 1; }
+          echo "Postgres: $pg"
+          echo "MongoDB:  $mg"
+          aws "${endpoint_arg[@]}" s3 cp "$src/$pg" "backups/$pg" --only-show-errors
+          aws "${endpoint_arg[@]}" s3 cp "$src/$mg" "backups/$mg" --only-show-errors
+          {
+            echo "PG_FILE=backups/$pg"
+            echo "MG_FILE=backups/$mg"
+          } >> "$GITHUB_ENV"
+
+      - name: Restaurar Postgres en la instancia efimera
+        run: node scripts/restore.mjs --postgres "$PG_FILE"
+
+      - name: Restaurar MongoDB en la instancia efimera
+        run: node scripts/restore.mjs --mongo "$MG_FILE"
+
+      - name: Verificar los datos restaurados
+        run: |
+          set -euo pipefail
+          export PGPASSWORD=whato
+
+          tables=$(psql -h localhost -U whato -d whato_restore_test -tAc \
+            "select count(*) from information_schema.tables where table_schema='public'")
+          echo "Postgres: $tables tablas en el schema public"
+          [ "$tables" -gt 0 ] || { echo 'El restore de Postgres no dejo ninguna tabla'; exit 1; }
+
+          has_contacts=$(psql -h localhost -U whato -d whato_restore_test -tAc \
+            "select to_regclass('public.contacts') is not null")
+          [ "$has_contacts" = "t" ] || { echo 'No aparece la tabla contacts tras el restore'; exit 1; }
+
+          contact_rows=$(psql -h localhost -U whato -d whato_restore_test -tAc 'select count(*) from contacts')
+          echo "Postgres: $contact_rows filas en contacts"
+
+          collections=$(mongosh "$MONGODB_URI" --quiet --eval 'db.getCollectionNames().length')
+          echo "MongoDB: $collections colecciones"
+          messages=$(mongosh "$MONGODB_URI" --quiet --eval 'db.messages.countDocuments()' || echo 0)
+          echo "MongoDB: $messages documentos en messages"
+
+          {
+            echo "### Prueba de restauracion — OK"
+            echo ""
+            echo "| Base | Dump | Comprobacion |"
+            echo "| --- | --- | --- |"
+            echo "| Postgres | \`$(basename "$PG_FILE")\` | $tables tablas, $contact_rows filas en contacts |"
+            echo "| MongoDB | \`$(basename "$MG_FILE")\` | $collections colecciones, $messages en messages |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Resumen en caso de fallo
+        if: failure()
+        run: |
+          {
+            echo "### Prueba de restauracion — FALLO"
+            echo ""
+            echo "El ultimo backup del bucket no se pudo restaurar/verificar."
+            echo "Revisar los logs de este job y seguir docs/DISASTER_RECOVERY.md."
+          } >> "$GITHUB_STEP_SUMMARY"

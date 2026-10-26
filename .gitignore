@@ -1,0 +1,20 @@
+node_modules/
+.next/
+build/
+dist/
+coverage/
+.DS_Store
+*.log
+.env*
+!.env.example
+
+# TypeScript build cache
+tsconfig.tsbuildinfo
+
+# Backups locales de Postgres/MongoDB no se suben ha git
+backups/
+
+# Multimedia de los mensajes almacenada en disco, en modo desarrollo (se conserva la carpeta)
+storage/media/*
+!storage/media/.gitkeep
+.atl/

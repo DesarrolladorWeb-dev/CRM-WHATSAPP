@@ -1,0 +1,180 @@
+name: Backups de bases de datos
+
+# Ejecuta scripts/backup.mjs (pg_dump + mongodump) en un horario fijo y sube los
+# dumps a un bucket S3-compatible (AWS S3 / Cloudflare R2 / Backblaze B2 / MinIO).
+#
+# Esta es la CAPA 2 de la estrategia de backups: dumps logicos diarios, offsite.
+# La CAPA 1 (PITR / backups continuos del proveedor gestionado) se configura en
+# el panel del proveedor y se documenta en docs/DISASTER_RECOVERY.md.
+#
+# --- Configuracion requerida (Settings -> Secrets and variables -> Actions) ----
+#
+#   Secrets (sensibles):
+#     DATABASE_URL                 URL de Postgres de produccion (con credenciales)
+#     MONGODB_URI                  URI de MongoDB de produccion (con credenciales)
+#     BACKUP_S3_ACCESS_KEY_ID      access key del bucket de backups
+#     BACKUP_S3_SECRET_ACCESS_KEY  secret key del bucket de backups
+#
+#   Variables (no sensibles):
+#     BACKUP_S3_BUCKET             nombre del bucket, ej. whato-crm-backups
+#     BACKUP_S3_REGION             region, ej. us-east-1 (o auto para R2)
+#     BACKUP_S3_ENDPOINT           (opcional) endpoint S3-compatible,
+#                                  ej. https://<accountid>.r2.cloudflarestorage.com
+#                                  Dejar vacio para AWS S3 nativo.
+#     BACKUP_S3_PREFIX             (opcional) carpeta dentro del bucket
+#                                  (por defecto: whato-crm)
+#     BACKUP_S3_RETENTION_DAILY    (opcional) cuantas copias diarias conservar
+#                                  por base en el bucket (por defecto: 14)
+
+on:
+  schedule:
+    - cron: '17 3 * * *' # diario, 03:17 UTC
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: Motivo de la corrida manual (queda en el historial)
+        required: false
+
+concurrency:
+  group: db-backup
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      MONGODB_URI: ${{ secrets.MONGODB_URI }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.BACKUP_S3_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.BACKUP_S3_SECRET_ACCESS_KEY }}
+      AWS_DEFAULT_REGION: ${{ vars.BACKUP_S3_REGION }}
+      BACKUP_S3_BUCKET: ${{ vars.BACKUP_S3_BUCKET }}
+      BACKUP_S3_ENDPOINT: ${{ vars.BACKUP_S3_ENDPOINT }}
+      BACKUP_S3_PREFIX: ${{ vars.BACKUP_S3_PREFIX || 'whato-crm' }}
+      BACKUP_S3_RETENTION_DAILY: ${{ vars.BACKUP_S3_RETENTION_DAILY || '14' }}
+      # El runner es efimero: basta con conservar en disco el dump recien creado,
+      # la retencion real vive en el bucket (paso "Aplicar retencion").
+      BACKUP_RETENTION_COUNT: '1'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Comprobar que la configuracion del bucket esta presente
+        run: |
+          set -euo pipefail
+          missing=()
+          [ -n "${DATABASE_URL:-}" ] || missing+=("secret DATABASE_URL")
+          [ -n "${MONGODB_URI:-}" ] || missing+=("secret MONGODB_URI")
+          [ -n "${AWS_ACCESS_KEY_ID:-}" ] || missing+=("secret BACKUP_S3_ACCESS_KEY_ID")
+          [ -n "${AWS_SECRET_ACCESS_KEY:-}" ] || missing+=("secret BACKUP_S3_SECRET_ACCESS_KEY")
+          [ -n "${BACKUP_S3_BUCKET:-}" ] || missing+=("variable BACKUP_S3_BUCKET")
+          [ -n "${AWS_DEFAULT_REGION:-}" ] || missing+=("variable BACKUP_S3_REGION")
+          if [ ${#missing[@]} -gt 0 ]; then
+            printf 'Falta configurar: %s\n' "${missing[@]}"
+            echo 'Ver el encabezado de .github/workflows/backup.yml.'
+            exit 1
+          fi
+
+      - name: Instalar clientes de base de datos (pg_dump 17 + mongodump)
+        run: |
+          set -euo pipefail
+          # Postgres client 17 desde el repo oficial PGDG (el de Ubuntu va por detras
+          # de la version del servidor gestionado y pg_dump se niega a versionar hacia abajo).
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsS -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \
+            https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
+            | sudo tee /etc/apt/sources.list.d/pgdg.list > /dev/null
+          # MongoDB Database Tools (mongodump/mongorestore) desde el repo oficial de Mongo.
+          curl -fsSL https://www.mongodb.org/static/pgp/server-8.0.asc \
+            | sudo gpg --dearmor -o /usr/share/keyrings/mongodb-server-8.0.gpg
+          echo "deb [signed-by=/usr/share/keyrings/mongodb-server-8.0.gpg] https://repo.mongodb.org/apt/ubuntu $(lsb_release -cs)/mongodb-org/8.0 multiverse" \
+            | sudo tee /etc/apt/sources.list.d/mongodb-org-8.0.list > /dev/null
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client-17 mongodb-database-tools
+          pg_dump --version
+          mongodump --version
+
+      - name: Generar backups (pg_dump -Fc + mongodump --gzip)
+        run: node scripts/backup.mjs
+
+      - name: Comprobar que se generaron los dos dumps
+        run: |
+          set -euo pipefail
+          pg=$(ls -1 backups/postgres_*.dump 2>/dev/null | wc -l)
+          mg=$(ls -1 backups/mongo_*.archive.gz 2>/dev/null | wc -l)
+          echo "Postgres dumps: $pg | Mongo dumps: $mg"
+          [ "$pg" -ge 1 ] || { echo 'No se genero el dump de Postgres'; exit 1; }
+          [ "$mg" -ge 1 ] || { echo 'No se genero el dump de MongoDB'; exit 1; }
+          ls -lh backups/
+
+      # Copia inmediata de corta duracion, util mientras el bucket no este listo
+      # o para descargar un backup puntual sin credenciales del bucket.
+      - name: Guardar como artefacto (retencion 7 dias)
+        uses: actions/upload-artifact@v4
+        with:
+          name: db-backup-${{ github.run_id }}
+          path: backups/
+          retention-days: 7
+          if-no-files-found: error
+
+      - name: Subir los dumps al bucket (offsite)
+        run: |
+          set -euo pipefail
+          endpoint_arg=()
+          [ -n "${BACKUP_S3_ENDPOINT:-}" ] && endpoint_arg=(--endpoint-url "$BACKUP_S3_ENDPOINT")
+          dest="s3://${BACKUP_S3_BUCKET}/${BACKUP_S3_PREFIX}"
+          for f in backups/postgres_*.dump backups/mongo_*.archive.gz; do
+            [ -e "$f" ] || continue
+            echo "Subiendo $(basename "$f") -> $dest/"
+            aws "${endpoint_arg[@]}" s3 cp "$f" "$dest/$(basename "$f")" --only-show-errors
+          done
+          echo 'Contenido actual del bucket:'
+          aws "${endpoint_arg[@]}" s3 ls "$dest/"
+
+      - name: Aplicar retencion en el bucket (conservar las ultimas N por base)
+        run: |
+          set -euo pipefail
+          keep="${BACKUP_S3_RETENTION_DAILY}"
+          endpoint_arg=()
+          [ -n "${BACKUP_S3_ENDPOINT:-}" ] && endpoint_arg=(--endpoint-url "$BACKUP_S3_ENDPOINT")
+          dest="s3://${BACKUP_S3_BUCKET}/${BACKUP_S3_PREFIX}"
+          # Los nombres llevan timestamp ISO ordenable (postgres_2026-09-04_18-30-05.dump),
+          # asi que un sort lexicografico == orden cronologico.
+          prune() {
+            local prefix="$1"
+            local keys
+            keys=$(aws "${endpoint_arg[@]}" s3 ls "$dest/" | awk '{print $4}' | grep -E "^${prefix}" | sort || true)
+            local total
+            total=$(printf '%s\n' "$keys" | sed '/^$/d' | wc -l)
+            if [ "$total" -le "$keep" ]; then
+              echo "$prefix: $total copias, nada que borrar (limite $keep)"
+              return
+            fi
+            printf '%s\n' "$keys" | sed '/^$/d' | head -n "-${keep}" | while read -r k; do
+              echo "$prefix: borrando copia antigua $k"
+              aws "${endpoint_arg[@]}" s3 rm "$dest/$k" --only-show-errors
+            done
+          }
+          prune 'postgres_'
+          prune 'mongo_'
+
+      - name: Resumen
+        if: always()
+        run: |
+          {
+            echo "### Backup de bases de datos"
+            echo ""
+            echo "- Disparo: \`${{ github.event_name }}\`"
+            echo "- Destino: \`s3://${BACKUP_S3_BUCKET:-<sin-configurar>}/${BACKUP_S3_PREFIX}\`"
+            echo "- Retencion en bucket: ${BACKUP_S3_RETENTION_DAILY} copias por base"
+            echo "- Artefacto de respaldo: \`db-backup-${{ github.run_id }}\` (7 dias)"
+          } >> "$GITHUB_STEP_SUMMARY"

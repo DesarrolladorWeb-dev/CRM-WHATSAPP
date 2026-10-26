@@ -1,0 +1,377 @@
+// Esquema relacional del hibrido Whato CRM (Postgres).
+//
+// Reparto de datos (ver AUDITORIA.md y los diagramas BaseRelacional / BaseNoRelacional):
+//   - Postgres (este archivo): todo lo que tiene relaciones / integridad referencial.
+//   - MongoDB (src/models/Message.ts, src/models/WebhookLog.ts): alto volumen y payload
+//     sin esquema (historial de chat y bitacora de webhooks). Message.conversationId y
+//     WebhookLog quedan como referencias blandas entre motores, sin FK fisica.
+//
+// Los ids son TEXT y conservan los identificadores string de la app (c1, conv_c1, seg_1...)
+// para no romper page.tsx, seedData.json ni los mocks.
+
+generator client {
+  provider = "prisma-client"
+  output = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ---------------------------------------------------------------------------
+// Autenticacion / usuarios  (NUEVO: viene del diagrama, sin flujo implementado)
+// ---------------------------------------------------------------------------
+
+model User {
+  id           String    @id @default(cuid())
+  name         String
+  email        String    @unique
+  password     String    @map("password")
+  role         String    @default("agent")
+  avatarUrl    String?   @map("avatar_url")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+  sessions     Session[]
+
+  @@map("users")
+}
+
+// El diagrama dibuja Sessions con los campos de User (copia/pega). Aqui se modela
+// como un almacen de sesiones real: token + expiracion ligado a un usuario.
+model Session {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token     String   @unique
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+// ---------------------------------------------------------------------------
+// API Keys y credenciales OAuth de canales
+// ---------------------------------------------------------------------------
+
+model ApiKey {
+  id          String       @id
+  name        String
+  // Hash HMAC-SHA256 de la clave (src/lib/apiKeySecurity.ts). Nunca texto plano.
+  keyHash     String       @unique @map("key_hash")
+  keyPrefix   String       @map("key_prefix")
+  permissions String[]     @default(["read"])
+  lastUsed    String       @default("Nunca") @map("last_used")
+  createdAt   DateTime     @default(now()) @map("created_at")
+  updatedAt   DateTime     @updatedAt @map("updated_at")
+
+  @@map("api_keys")
+}
+
+// ---------------------------------------------------------------------------
+// Contactos + etiquetas + interacciones + citas
+// ---------------------------------------------------------------------------
+
+model Contact {
+  id            String              @id
+  name          String
+  avatarUrl     String              @default("") @map("avatar_url")
+  handle        String              @unique
+  phone         String?
+  email         String?
+  channel       String              @default("whatsapp")
+  sentiment     String              @default("neutral")
+  leadScore     Int                 @default(50) @map("lead_score")
+  stage         String              @default("lead")
+  dealValue     Float               @default(0) @map("deal_value")
+  notes         String              @default("")
+  location      String?
+  company       String?
+  // Esquema dinamico por contacto (equivalente al custom_fields NoSQL del diagrama).
+  customFields  Json                @default("{}") @map("custom_fields")
+  lastActive    String              @default("Ahora") @map("last_active")
+  // Baja de difusion masiva. Un contacto con optedOut queda excluido de TODA
+  // campana (cualquier canal); las conversaciones 1 a 1 del Inbox no se ven
+  // afectadas. Es un requisito legal en la mayoria de paises, no una
+  // preferencia de producto.
+  optedOut      Boolean             @default(false) @map("opted_out")
+  createdAt     DateTime            @default(now()) @map("created_at")
+  updatedAt     DateTime            @updatedAt @map("updated_at")
+  contactTags   ContactTag[]
+  interactions  ContactInteraction?
+  conversations Conversation[]
+  campaignSends CampaignRecipient[]
+
+  @@index([channel])
+  @@index([stage])
+  @@map("contacts")
+}
+
+model Tag {
+  id          String       @id @default(cuid())
+  name        String       @unique
+  color       String       @default("#6b7280")
+  contactTags ContactTag[]
+  segmentTags SegmentTag[]
+
+  @@map("tags")
+}
+
+// Tabla de union N:M contacto <-> etiqueta (reemplaza el array Contact.tags).
+model ContactTag {
+  contactId String  @map("contact_id")
+  tagId     String  @map("tag_id")
+  contact   Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  tag       Tag     @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([contactId, tagId])
+  @@index([tagId])
+  @@map("contact_tags")
+}
+
+// Bitacora del embudo por contacto (antes era Contact.interactions embebido).
+model ContactInteraction {
+  id                   String  @id @default(cuid())
+  contactId            String  @unique @map("contact_id")
+  contact              Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  firstReply           Boolean @default(false) @map("first_reply")
+  appointmentConfirmed Boolean @default(false) @map("appointment_confirmed")
+  proposalSent         Boolean @default(false) @map("proposal_sent")
+  dealClosed           Boolean @default(false) @map("deal_closed")
+
+  @@map("contact_interactions")
+}
+
+// ---------------------------------------------------------------------------
+// Conversaciones  (los mensajes viven en MongoDB)
+// ---------------------------------------------------------------------------
+
+model Conversation {
+  id              String   @id
+  contactId       String   @map("contact_id")
+  contact         Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  channel         String   @default("whatsapp")
+  unreadCount     Int      @default(0) @map("unread_count")
+  lastMessage     String   @default("") @map("last_message")
+  lastMessageTime String   @default("Ahora") @map("last_message_time")
+  status          String   @default("open")
+  assignedAgent   String   @default("Asesor Principal") @map("assigned_agent")
+  summary         String?
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@index([contactId])
+  @@index([channel])
+  @@map("conversations")
+}
+
+// ---------------------------------------------------------------------------
+// Segmentacion  (arrays embebidos -> tablas de union)
+// ---------------------------------------------------------------------------
+
+model Segment {
+  id           String           @id
+  name         String
+  description  String           @default("")
+  minScore     Int?             @map("min_score")
+  contactCount Int              @default(0) @map("contact_count")
+  createdAt    DateTime         @default(now()) @map("created_at")
+  updatedAt    DateTime         @updatedAt @map("updated_at")
+  channels     SegmentChannel[]
+  stages       SegmentStage[]
+  segmentTags  SegmentTag[]
+  campaigns    Campaign[]
+
+  @@map("segments")
+}
+
+model SegmentChannel {
+  segmentId String  @map("segment_id")
+  channel   String
+  segment   Segment @relation(fields: [segmentId], references: [id], onDelete: Cascade)
+
+  @@id([segmentId, channel])
+  @@map("segment_channels")
+}
+
+model SegmentStage {
+  segmentId String  @map("segment_id")
+  stage     String
+  segment   Segment @relation(fields: [segmentId], references: [id], onDelete: Cascade)
+
+  @@id([segmentId, stage])
+  @@map("segment_stages")
+}
+
+model SegmentTag {
+  segmentId String  @map("segment_id")
+  tagId     String  @map("tag_id")
+  segment   Segment @relation(fields: [segmentId], references: [id], onDelete: Cascade)
+  tag       Tag     @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([segmentId, tagId])
+  @@index([tagId])
+  @@map("segment_tags")
+}
+
+// ---------------------------------------------------------------------------
+// Campanas
+// ---------------------------------------------------------------------------
+
+model Campaign {
+  id             String   @id
+  title          String
+  channel        String   @default("whatsapp")
+  segmentId      String   @map("segment_id")
+  segment        Segment  @relation(fields: [segmentId], references: [id])
+  // Copia desnormalizada del nombre del segmento (ya presente en la app).
+  segmentName    String   @default("") @map("segment_name")
+  content        String   @default("")
+  imageUrl       String?  @map("image_url")
+  // Ciclo de vida: draft -> scheduled -> running -> completed
+  //                              \-> paused -> running
+  //                               \-> failed / cancelled
+  // Las transiciones validas las impone src/lib/services/campaignStatus.ts;
+  // aqui se guarda como texto porque el resto del esquema usa el mismo estilo.
+  status         String   @default("draft")
+  // Contadores desnormalizados: son una FOTO del ultimo recuento sobre
+  // campaign_recipients, no la fuente de verdad. La fuente de verdad son las
+  // filas de destinatarios; estos campos existen para poder listar campanas
+  // sin agregar por cada una. Los recalcula campaignMetrics.ts.
+  sentCount      Int      @default(0) @map("sent_count")
+  deliveredCount Int      @default(0) @map("delivered_count")
+  openRate       Float    @default(0) @map("open_rate")
+  clickRate      Float    @default(0) @map("click_rate")
+  conversions    Int      @default(0)
+  // Texto libre heredado ("15 de marzo", "manana por la tarde"). Se conserva
+  // porque hay filas que lo usan, pero NO se puede consultar por rango: es la
+  // razon por la que las campanas programadas nunca salian. Solo decorativo.
+  scheduledDate  String?  @map("scheduled_date")
+  // Momento real en que la campana debe lanzarse, en UTC. Esta es la columna
+  // que mira el worker (`campaignScheduler.ts`): si `status = 'scheduled'` y
+  // `scheduledAt <= ahora`, la campana se lanza sola. Null = sin programar.
+  scheduledAt    DateTime? @map("scheduled_at")
+  launchedAt     DateTime? @map("launched_at")
+  completedAt    DateTime? @map("completed_at")
+  // Motivo de un estado 'failed' (sin destinatarios, canal caido, etc.).
+  failureReason  String?  @map("failure_reason")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+  recipients     CampaignRecipient[]
+
+  @@index([segmentId])
+  @@index([status])
+  // El worker pregunta cada minuto «que campanas vencieron». Sin este indice
+  // esa consulta seria un escaneo completo de la tabla cada 60 segundos.
+  @@index([status, scheduledAt])
+  @@map("campaigns")
+}
+
+// Un destinatario = un intento de envio a un contacto dentro de una campana.
+// Es la pieza central de la logica de campana: sin ella no se sabe a quien se
+// envio, no se puede reintentar sin duplicar, y no hay metricas reales.
+model CampaignRecipient {
+  id          String    @id @default(cuid())
+  campaignId  String    @map("campaign_id")
+  campaign    Campaign  @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  contactId   String    @map("contact_id")
+  contact     Contact   @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  // Canal efectivo del envio. Se copia de la campana al materializar la
+  // audiencia: si la campana se edita despues, el historico no cambia.
+  channel     String    @default("whatsapp")
+  // Destino ya resuelto para ese canal (telefono, @handle o email). Se guarda
+  // congelado para que el historico siga siendo legible aunque el contacto
+  // cambie de numero mas adelante.
+  address     String    @default("")
+  // pending -> sent -> delivered -> read   |   failed | skipped
+  // 'skipped' = nunca se intento (sin direccion para el canal, canal no
+  // conectado). Se distingue de 'failed' para no inflar la tasa de error.
+  status      String    @default("pending")
+  // Id del mensaje que devuelve el proveedor. Es la llave para casar los
+  // webhooks de entrega/lectura con la fila correcta.
+  providerId  String?   @map("provider_id")
+  error       String?
+  sentAt      DateTime? @map("sent_at")
+  deliveredAt DateTime? @map("delivered_at")
+  readAt      DateTime? @map("read_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  // La regla que hace todo esto seguro: un contacto no puede aparecer dos
+  // veces en la misma campana. Es la barrera fisica contra el doble envio,
+  // incluso si el proceso se reintenta o se lanza dos veces a la vez.
+  @@unique([campaignId, contactId])
+  @@index([campaignId, status])
+  @@index([providerId])
+  @@map("campaign_recipients")
+}
+
+// ---------------------------------------------------------------------------
+// Automatizaciones  (array actions -> tabla hija)
+// ---------------------------------------------------------------------------
+
+model AutomationRule {
+  id               String             @id
+  name             String
+  triggerEvent     String             @map("trigger_event")
+  conditionChannel String?            @map("condition_channel")
+  conditionKeyword String?            @map("condition_keyword")
+  enabled          Boolean            @default(true)
+  triggerCount     Int                @default(0) @map("trigger_count")
+  lastTriggered    String?            @map("last_triggered")
+  createdAt        DateTime           @default(now()) @map("created_at")
+  updatedAt        DateTime           @updatedAt @map("updated_at")
+  actions          AutomationAction[]
+
+  @@map("automation_rules")
+}
+
+model AutomationAction {
+  id          String         @id @default(cuid())
+  ruleId      String         @map("rule_id")
+  rule        AutomationRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+  type        String
+  targetValue String         @map("target_value")
+  position    Int            @default(0)
+
+  @@index([ruleId])
+  @@map("automation_actions")
+}
+
+// ---------------------------------------------------------------------------
+// Contenido auxiliar
+// ---------------------------------------------------------------------------
+
+model QuickReply {
+  id        String   @id
+  title     String
+  emoji     String   @default("")
+  text      String   @default("")
+  imageUrl  String?  @map("image_url")
+  category  String   @default("general")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("quick_replies")
+}
+
+model PresetImage {
+  id   String @id @default(cuid())
+  name String
+  url  String
+  type String @default("general")
+
+  @@map("preset_images")
+}
+
+// Config del webhook saliente (antes era el singleton INITIAL_WEBHOOK del mock).
+model WebhookConfig {
+  id        String   @id @default("default")
+  url       String   @default("")
+  secret    String   @default("")
+  events    String[] @default([])
+  active    Boolean  @default(true)
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("webhook_config")
+}
