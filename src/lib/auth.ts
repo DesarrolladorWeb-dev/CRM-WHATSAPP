@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { connectToPostgres } from '@/lib/postgres';
 import { jwtVerify } from 'jose';
+import { captureException } from './logger';
+import { dbUnavailableResponse } from '@/lib/demo';
 
 // 'delete' es un permiso INDEPENDIENTE y explicito: no lo otorga 'write'.
 // Una credencial pensada para editar contenido no debe poder borrar entidades.
@@ -153,9 +155,15 @@ export async function requireUserPermission(req: NextRequest, required: Permissi
     return NextResponse.json({ success: false, error: 'No autenticado' }, { status: 401 })
   }
 
-  const db = await connectToPostgres();
-  const user = await db.user.findUnique({ where: { id: userId } })
-  if (!user || !hasPermission(user.role, required)) {
+  try{
+    const db = await connectToPostgres();
+    if(!db){
+      return dbUnavailableResponse();
+    }
+
+    const user = await db.user.findUnique({ where: { id: userId } })
+    
+    if (!user || !hasPermission(user.role, required)) {
     return NextResponse.json(
       { success: false, error: 'Permisos insuficientes para esta operación' },
       {
@@ -164,7 +172,22 @@ export async function requireUserPermission(req: NextRequest, required: Permissi
     )
   }
 
-  return null
+  return null;}
+  catch(error){
+    const errorId = captureException(error, {
+    route: 'requireUserPermission',
+  });
+
+  return NextResponse.json(
+    {
+      success: false,
+      error: 'No se pudieron verificar los permisos. Inténtalo de nuevo.',
+      errorId,
+    },
+    { status: 503 }
+  );
+  }
+
 
 
 

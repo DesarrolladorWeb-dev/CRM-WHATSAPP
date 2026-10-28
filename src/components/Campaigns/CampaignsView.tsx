@@ -378,7 +378,6 @@ export const CampaignsView: React.FC<CampaignsViewProps> = ({
         setLaunchError('No se pudo calcular la audiencia de la campaña.');
         return;
       }
-      console.log(datos)
       setIsModalOpen(false);
       resetForm();
       setPreview(datos);
