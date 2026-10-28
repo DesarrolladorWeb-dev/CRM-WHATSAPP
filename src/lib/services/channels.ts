@@ -1,5 +1,5 @@
 import type { SocialChannel } from '@/types';
-import { sendTextMessage, sendProductInfo, normalizePhone, sendMediaMessage } from '@/lib/whatsappService';
+import { sendTextMessage, normalizePhone, sendMediaMessage } from '@/lib/whatsappService';
 
 /**
  * Forma del resultado que devuelve el cliente de WhatsApp.

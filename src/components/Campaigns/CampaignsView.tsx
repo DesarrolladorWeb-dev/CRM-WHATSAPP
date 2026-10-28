@@ -5,8 +5,8 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { usePresetImages } from '@/hooks/usePresetImages';
 import { Campaign, Segment, SocialChannel, CampaignPreview } from '../../types';
 import { Sparkles, Plus, CheckCircle2, Image as ImageIcon,
-  X, Trash2, Eye, FolderOpen, Check, AlertCircle,
-  MessageSquare, Megaphone, Rocket, MessageCircle, Instagram, Twitter,
+  X, Trash2, Eye, FolderOpen, Check, AlertCircle, 
+  Megaphone, Rocket, MessageCircle, Instagram,
   Target, Mail, Tag, Flame, Lightbulb, Save, PenLine, MousePointerClick,
   PartyPopper, CheckCheck, Clock
 } from 'lucide-react';

@@ -225,7 +225,6 @@ export const InboxView: React.FC<InboxViewProps> = ({
     setSelectedContactIds(new Set());
   };
   const [channelFilter, setChannelFilter] = useState<string>('all');
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState<boolean>(false);
   const [mobileStage, setMobileStage] = useState<'list' | 'chat' | 'info'>('chat');
   const [inputText, setInputText] = useState<string>('');
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
