@@ -27,7 +27,8 @@
 import { InteractiveContent } from "./whatsappInteractive";
 
 /** Quita el "/" final para evitar URLs con doble barra (//api/...). */
-const limpiar = (url: string) => url.replace(/\/+$/, '');
+//const limpiar = (url: string) => url.replace(/\/+$/, '');
+const limpiar = (url?: string | null) => (url || "").replace(/\/+$/, "");
 
 /**
  * URL interna, solo para codigo de servidor. Sin prefijo NEXT_PUBLIC_ a
