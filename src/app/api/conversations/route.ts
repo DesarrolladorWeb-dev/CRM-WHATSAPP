@@ -12,7 +12,6 @@ import { DEMO_MODE, dbUnavailableResponse } from '@/lib/demo';
 import { conversationCreateSchema, conversationUpdateSchema, primerErrorDeZod } from '@/lib/schemas';
 import { logger, motivo } from '@/lib/logger';
 import { requireUserPermission } from '@/lib/auth';
-import { success } from 'zod';
 
 export async function GET(req: NextRequest) {
   const denied = await requireUserPermission(req, 'read');

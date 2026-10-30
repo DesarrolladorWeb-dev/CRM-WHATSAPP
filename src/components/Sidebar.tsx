@@ -1,7 +1,7 @@
 import React from 'react';
 import {
-  MessageSquare, LayoutDashboard, Target, Megaphone, Zap, TrendingUp, Plug, X,
-  Smartphone, Rocket, Sparkles, Leaf
+  MessageSquare, LayoutDashboard, Target, Megaphone, Zap, TrendingUp, X,
+  Smartphone, Rocket, Sparkles
 } from 'lucide-react';
 
 interface SidebarProps {

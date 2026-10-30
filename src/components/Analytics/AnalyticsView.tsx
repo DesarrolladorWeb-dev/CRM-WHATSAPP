@@ -2,7 +2,7 @@ import React from 'react';
 import { AnalyticsData } from '../../types';
 import { 
   BarChart3, TrendingUp, Clock, Users, Zap, DollarSign, Sparkles,
-  MessageCircle, Rocket, Target, PartyPopper, Flame, Instagram, Twitter, MessageSquare
+  MessageCircle, Rocket, Target, PartyPopper, Flame, Instagram
 } from 'lucide-react';
 import { 
   ResponsiveContainer, PieChart, Pie, Cell, AreaChart, Area, 

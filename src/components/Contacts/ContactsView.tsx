@@ -1,9 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import Image from 'next/image';
 import { Contact, Conversation, Message, PipelineStage, SocialChannel } from '../../types';
 import {
-  Users, Plus, Search, DollarSign, Sparkles, Mail, Tag, Trash2,
-  MessageSquare, MessageCircle, Instagram, Twitter, Sprout, Target,
+  Users, Plus, Search, DollarSign, Sparkles, Mail, Tag, Trash2, 
+  MessageCircle, Instagram, Sprout, Target,
   Briefcase, PartyPopper, XCircle, BarChart3, Star, Smartphone, User, ArrowRight, Inbox, RefreshCw, Settings, AlertCircle,
   FileText,
   XCircleIcon

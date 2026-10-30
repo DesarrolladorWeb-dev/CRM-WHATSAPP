@@ -34,7 +34,7 @@ interface InboxViewProps {
   activeConversationId: string;
   onSelectConversation: (id: string) => void;
   messagesMap: Record<string, Message[]>;
-  onSendMessage: (conversationId: string, text: string, aiGenerated?: boolean, mediaUrl?: string, interactive?: InteractiveContent) => void;
+  onSendMessage: (conversationId: string, text: string, aiGenerated?: boolean, mediaUrl?: string, interactive?: InteractiveContent, mediaType?: 'image') => void;
   onUpdateContactStage: (contactId: string, newStage: PipelineStage) => void;
   onUpdateContactTags: (contactId: string, newTags: string[]) => void;
   handleDeleteConversation: (conversationId: string) => void;
@@ -225,7 +225,6 @@ export const InboxView: React.FC<InboxViewProps> = ({
     setSelectedContactIds(new Set());
   };
   const [channelFilter, setChannelFilter] = useState<string>('all');
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState<boolean>(false);
   const [mobileStage, setMobileStage] = useState<'list' | 'chat' | 'info'>('chat');
   const [inputText, setInputText] = useState<string>('');
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
@@ -476,7 +475,7 @@ export const InboxView: React.FC<InboxViewProps> = ({
 
   const handleSend = () => {
     if ((!inputText.trim() && !attachedImageUrl) || !activeConv) return;
-    onSendMessage(activeConv.id, inputText.trim(), false, attachedImageUrl || undefined);
+    onSendMessage(activeConv.id, inputText.trim(), false, attachedImageUrl || undefined,undefined,'image');
     setInputText('');
     setAttachedImageUrl('');
     setShowAttachInput(false);
@@ -492,7 +491,7 @@ export const InboxView: React.FC<InboxViewProps> = ({
       .replace(/{agente}/g, activeConv.assignedAgent || 'Asistente XIO');
 
     if (qr.imageUrl) {
-      onSendMessage(activeConv.id, replacedText, false, qr.imageUrl);
+      onSendMessage(activeConv.id, replacedText, false, qr.imageUrl,undefined,'image');
     } else {
       setInputText(replacedText);
     }
@@ -1236,7 +1235,7 @@ export const InboxView: React.FC<InboxViewProps> = ({
                       )}
 
                       {(msg.interactive?.body || msg.text) && (
-                        <p className="whitespace-pre-line leading-relaxed font-medium">
+                        <p className="whitespace-pre-line break-words leading-relaxed font-medium">
                           {renderTextWithLinks(msg.interactive ? msg.interactive.body : msg.text)}
                         </p>
                       )}

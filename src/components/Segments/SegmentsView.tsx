@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Segment, SocialChannel, Contact } from '../../types';
-import { Target, Users, Plus, Sparkles, Check, Megaphone, ChevronRight, Trash2, MessageCircle, Instagram, Twitter, MessageSquare, Star, Flame } from 'lucide-react';
+import { Target, Users, Plus, Sparkles, Check, Megaphone, ChevronRight, Trash2, Instagram, Star, Flame } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Modal } from '@/components/ui/Modal';

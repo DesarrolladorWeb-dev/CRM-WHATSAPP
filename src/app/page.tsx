@@ -409,7 +409,7 @@ export default function HomePage() {
 
   const unreadTotal = visibleConversations.reduce((acc, c) => acc + (c.unreadCount || 0), 0);
   // Handle Send Message
-  const handleSendMessage = async (conversationId: string, text: string, aiGenerated: boolean = false, mediaUrl?: string, interactive?: InteractiveContent) => {
+  const handleSendMessage = async (conversationId: string, text: string, aiGenerated: boolean = false,mediaUrl?: string, interactive?: InteractiveContent,mediaType?:'image') => {
     const timestamp = formatTime();
     const conv = conversations.find(c => c.id === conversationId);
     if (!conv) return;
@@ -428,10 +428,35 @@ export default function HomePage() {
       interactive
     };
 
+    const esImagenAdjunta =
+      !!mediaUrl &&
+      (mediaType === 'image' || mediaUrl.startsWith('data:image/'));
+    const enviarImagenYTexto = esImagenAdjunta && !!text.trim();
+    let textoImagenWhatsAppEnviado = false;
+
+    const imageMsg: Message = {
+    ...newMsg,
+    id: `${newMsg.id}_image`,
+    text: '',
+    mediaUrl,
+    hasMedia: true,
+    mediaType: 'image',
+    };
+
+  const textMsg: Message = {
+    ...newMsg,
+    id: `${newMsg.id}_text`,
+    text: text.trim(),
+    mediaUrl: undefined,
+    hasMedia: false,
+    mediaType: undefined,
+    };
+
     // Update Messages Map
     setMessagesMap(prev => ({
       ...prev,
-      [conversationId]: [...(prev[conversationId] || []), newMsg]
+      [conversationId]: [
+        ...(prev[conversationId] || []),...(enviarImagenYTexto ? [imageMsg, textMsg] : [newMsg] ),]
     }));
 
     // Update Conversation Last Message
@@ -439,7 +464,13 @@ export default function HomePage() {
       if (c.id === conversationId) {
         return {
           ...c,
-          lastMessage: interactive ? interactive.body : mediaUrl ? `📷 ${text || 'Imagen adjunta'}` : text,
+          lastMessage: interactive
+            ? interactive.body
+            : enviarImagenYTexto
+              ? text.trim()
+              : mediaUrl
+                ? `📷 ${text || 'Imagen adjunta'}`
+                : text,
           lastMessageTime: 'Ahora',
           unreadCount: 0
         };
@@ -463,7 +494,7 @@ export default function HomePage() {
       }
 
       const esAudioSimulado = !!mediaUrl && mediaUrl.startsWith('data:audio/');
-      const esImagen = !!mediaUrl && mediaUrl.startsWith('data:image/');
+      const esImagen = esImagenAdjunta;
       const esVideo = !!mediaUrl && mediaUrl.startsWith('data:video/');
       const esDocumento = !!mediaUrl && !esAudioSimulado && !esImagen && !esVideo;
 
@@ -490,16 +521,46 @@ export default function HomePage() {
 
       } else if (phone && (text.trim() || mediaUrl || interactive)) {
         let resultado;
+        let resultadoImagen:
+        | Awaited<ReturnType<typeof sendMediaMessage>>
+        | undefined;
+        let resultadoTexto:
+        | Awaited<ReturnType<typeof sendTextMessage>>
+        | undefined;
 
-        if (esImagen) {
-          resultado = await sendMediaMessage({
-            phone,
-            type: 'image',
-            media: mediaUrl,
-            caption: text.trim() || undefined,
-          });
-        } else if (esAudioSimulado) {
-          resultado = await sendMediaMessage({
+        let mensajeFallidoId = newMsg.id;
+        
+      if (esImagen) {
+        resultadoImagen = await sendMediaMessage({
+        phone,
+        type: 'image',
+        media: mediaUrl,
+        });
+        resultado = resultadoImagen;
+
+        if (!resultadoImagen.ok) {
+          mensajeFallidoId = enviarImagenYTexto ? imageMsg.id : newMsg.id;
+          if (enviarImagenYTexto) {
+            setMessagesMap(prev => ({
+              ...prev,
+              [conversationId]: (prev[conversationId] || []).map(m =>
+                m.id === textMsg.id ? { ...m, status: 'failed' } : m
+              )
+            }));
+          }
+      } else if (text.trim()) {
+        resultadoTexto = await sendTextMessage(phone, text.trim());
+        resultado = resultadoTexto;
+      
+      if (!resultadoTexto.ok) {
+        mensajeFallidoId = textMsg.id;
+      } else {
+        textoImagenWhatsAppEnviado = true;
+      }
+    }
+  }
+        else if (esAudioSimulado) {
+            resultado = await sendMediaMessage({
             phone,
             type: 'audio',
             media: mediaUrl,
@@ -528,7 +589,7 @@ export default function HomePage() {
           setMessagesMap(prev => ({
             ...prev,
             [conversationId]: (prev[conversationId] || []).map(m =>
-              m.id === newMsg.id ? { ...m, status: 'failed' } : m
+              m.id === mensajeFallidoId ? { ...m, status: 'failed' } : m
             )
           }));
           const detalle = resultado.error === 'El numero no esta registrado en WhatsApp' ||
@@ -540,12 +601,22 @@ export default function HomePage() {
       }
     }
 
-    // Asynchronously save to DB (best-effort; la persistencia depende de la API key)
-    apiFetch('/api/messages', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(newMsg)
-    }).catch(() => null);
+    // WhatsApp's send-media route persists the image; persist the separate text here.
+    const messagesToPersist = conv.channel === 'whatsapp' && esImagenAdjunta
+      ? enviarImagenYTexto && textoImagenWhatsAppEnviado
+        ? [textMsg]
+        : []
+      : enviarImagenYTexto
+        ? [imageMsg, textMsg]
+        : [newMsg];
+
+    messagesToPersist.forEach(message => {
+      apiFetch('/api/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(message)
+      }).catch(() => null);
+    });
   };
 
 
@@ -1802,5 +1873,3 @@ export default function HomePage() {
     </div>
   );
 }
-
-

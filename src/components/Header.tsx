@@ -1,12 +1,11 @@
 import React, { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import {
-  Bell, Search, Github, Menu, X, Moon, Sun,
+  Bell, Search, Menu, X, Moon, Sun,
   MessageCircle, LayoutGrid, Target, Megaphone, Zap, TrendingUp, Plug, Rocket,
   LogOut,
   User,
   MessageSquare,
   Instagram,
-  Twitter,
   ChevronRight,
   Mail
 } from 'lucide-react';
