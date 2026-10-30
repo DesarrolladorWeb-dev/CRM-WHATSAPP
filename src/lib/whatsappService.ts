@@ -43,7 +43,9 @@ const URL_INTERNA = typeof window === 'undefined'
 
 
 /** URL publica: la que usa el navegador, y el respaldo del servidor. */
-const URL_PUBLICA = process.env.NEXT_PUBLIC_WHATSAPP_SERVICE_URL || 'http://localhost:3001';
+const URL_PUBLICA =
+  process.env.NEXT_PUBLIC_WHATSAPP_SERVICE_URL ||
+  process.env.WHATSAPP_SERVICE_URL;
 
 const SERVICE_URL = limpiar(URL_INTERNA || URL_PUBLICA);
 
