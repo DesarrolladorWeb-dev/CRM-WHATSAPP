@@ -24,6 +24,10 @@ RUN npm ci
 COPY . .
 
 # Continuar con tus instrucciones actuales...
+ARG NEXT_PUBLIC_WHATSAPP_SERVICE_URL
+
+ENV NEXT_PUBLIC_WHATSAPP_SERVICE_URL=$NEXT_PUBLIC_WHATSAPP_SERVICE_URL
+
 
 RUN npx prisma generate
 RUN npm run build
