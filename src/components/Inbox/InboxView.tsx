@@ -34,7 +34,7 @@ interface InboxViewProps {
   activeConversationId: string;
   onSelectConversation: (id: string) => void;
   messagesMap: Record<string, Message[]>;
-  onSendMessage: (conversationId: string, text: string, aiGenerated?: boolean, mediaUrl?: string, interactive?: InteractiveContent) => void;
+  onSendMessage: (conversationId: string, text: string, aiGenerated?: boolean, mediaUrl?: string, interactive?: InteractiveContent, mediaType?: 'image') => void;
   onUpdateContactStage: (contactId: string, newStage: PipelineStage) => void;
   onUpdateContactTags: (contactId: string, newTags: string[]) => void;
   handleDeleteConversation: (conversationId: string) => void;
@@ -475,7 +475,7 @@ export const InboxView: React.FC<InboxViewProps> = ({
 
   const handleSend = () => {
     if ((!inputText.trim() && !attachedImageUrl) || !activeConv) return;
-    onSendMessage(activeConv.id, inputText.trim(), false, attachedImageUrl || undefined);
+    onSendMessage(activeConv.id, inputText.trim(), false, attachedImageUrl || undefined,undefined,'image');
     setInputText('');
     setAttachedImageUrl('');
     setShowAttachInput(false);
@@ -491,7 +491,7 @@ export const InboxView: React.FC<InboxViewProps> = ({
       .replace(/{agente}/g, activeConv.assignedAgent || 'Asistente XIO');
 
     if (qr.imageUrl) {
-      onSendMessage(activeConv.id, replacedText, false, qr.imageUrl);
+      onSendMessage(activeConv.id, replacedText, false, qr.imageUrl,undefined,'image');
     } else {
       setInputText(replacedText);
     }

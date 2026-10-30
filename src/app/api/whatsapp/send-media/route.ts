@@ -102,7 +102,7 @@ export async function POST(req: NextRequest) {
             conversationId: conversation.id,
             sender: 'agent',
             senderName: 'Agente',
-            text: caption || `[${type.charAt(0).toUpperCase() + type.slice(1)} enviado]`,
+            text: caption || (type === 'image' ? '' : `[${type.charAt(0).toUpperCase() + type.slice(1)} enviado]`),
             timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
             channel: 'whatsapp',
             status: 'sent',
