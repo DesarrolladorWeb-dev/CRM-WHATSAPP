@@ -1235,7 +1235,7 @@ export const InboxView: React.FC<InboxViewProps> = ({
                       )}
 
                       {(msg.interactive?.body || msg.text) && (
-                        <p className="whitespace-pre-line leading-relaxed font-medium">
+                        <p className="whitespace-pre-line break-words leading-relaxed font-medium">
                           {renderTextWithLinks(msg.interactive ? msg.interactive.body : msg.text)}
                         </p>
                       )}
