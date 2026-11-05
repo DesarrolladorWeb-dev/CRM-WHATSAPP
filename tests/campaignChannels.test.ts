@@ -77,6 +77,36 @@ describe('registro de canales', () => {
         expect(res.ok).toBe(false);
       }
     });
+
+    it('se declaran desconectados aunque exista un token en el entorno', () => {
+      
+      const claves = [
+        'INSTAGRAM_ACCESS_TOKEN',
+        'TWITTER_ACCESS_TOKEN',
+        'MESSENGER_PAGE_TOKEN',
+        'SMTP_URL',
+      ] as const;
+      const previos = claves.map((k) => process.env[k]);
+
+      for (const k of claves) process.env[k] = 'token-de-prueba';
+      try {
+        for (const id of ['instagram', 'twitter', 'messenger', 'email'] as const) {
+          expect(getChannelAdapter(id)!.isConnected()).toBe(false);
+        }
+      } finally {
+        claves.forEach((k, i) => {
+          const previo = previos[i];
+          if (previo === undefined) delete process.env[k];
+          else process.env[k] = previo;
+        });
+      }
+    });
+
+    it('WhatsApp si se declara conectado', () => {
+      // Es el unico canal con transporte real: si esto fallara, todas las
+      // campanas de WhatsApp quedarian en skipped.
+      expect(getChannelAdapter('whatsapp')!.isConnected()).toBe(true);
+    });
   });
 });
 

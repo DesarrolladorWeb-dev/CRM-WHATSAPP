@@ -174,7 +174,7 @@ const instagram: ChannelAdapter = {
   addressField: 'handle',
   resolveAddress: (c) => limpiarHandle(c.handle),
   supportsMedia: true,
-  isConnected: () => Boolean(process.env.INSTAGRAM_ACCESS_TOKEN),
+  isConnected: () => false,
   throttleMs: 1000,
   send: sinTransporte('Instagram no esta conectado todavia'),
 };
@@ -185,7 +185,7 @@ const twitter: ChannelAdapter = {
   addressField: 'handle',
   resolveAddress: (c) => limpiarHandle(c.handle),
   supportsMedia: true,
-  isConnected: () => Boolean(process.env.TWITTER_ACCESS_TOKEN),
+  isConnected: () => false,
   throttleMs: 1000,
   send: sinTransporte('X/Twitter no esta conectado todavia'),
 };
@@ -196,7 +196,7 @@ const messenger: ChannelAdapter = {
   addressField: 'handle',
   resolveAddress: (c) => limpiarHandle(c.handle),
   supportsMedia: true,
-  isConnected: () => Boolean(process.env.MESSENGER_PAGE_TOKEN),
+  isConnected: () => false,
   throttleMs: 500,
   send: sinTransporte('Messenger no esta conectado todavia'),
 };
@@ -210,7 +210,7 @@ const email: ChannelAdapter = {
     return EMAIL_RE.test(dir) ? dir : null;
   },
   supportsMedia: true,
-  isConnected: () => Boolean(process.env.SMTP_URL),
+  isConnected: () => false,
   throttleMs: 100,
   send: sinTransporte('El envio por email no esta configurado todavia'),
 };
