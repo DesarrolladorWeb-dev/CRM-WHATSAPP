@@ -16,7 +16,7 @@ export async function sendInteractiveMessage(phone: string, content: Interactive
             return { ok: false as const, status: res.status, error: body?.error || `HTTP ${res.status}` };
         }
 
-        return { ok: true as const, data: { messageId: body?.messageId as string | undefined, degraded: !body.degraded } };
+        return { ok: true as const, data: { messageId: body?.messageId as string | undefined, degraded: Boolean(body.degraded) } };
 
     } catch {
         return { ok: false as const, status: 0, error: 'No se pudo contactar con el servidor' };
