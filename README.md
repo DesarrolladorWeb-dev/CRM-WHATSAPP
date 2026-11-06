@@ -394,7 +394,8 @@ y procedimientos paso a paso para cada escenario de pérdida de datos.
 | `GET` | `/api/health` | Estado del servidor y conexión a MongoDB. |
 | `GET` / `POST` / `PUT` / `DELETE` | `/api/contacts` | CRUD de contactos / leads (`DELETE` no está conectado a la interfaz todavía). |
 | `GET` / `POST` / `PUT` | `/api/conversations` | Listar y actualizar hilos de conversación. |
-| `GET` / `POST` | `/api/messages` | Listar y enviar mensajes en el chat. |
+| `GET` / `POST` | `/api/messages` | Listar y enviar mensajes en el chat. Acepta `mediaUrl` (URL o data URL) y `media` (base64 + mimetype) para mensajes con imagen. |
+| `POST` | `/api/whatsapp/send-media` | Envía multimedia por WhatsApp y registra el mensaje en el chat. Acepta `x-n8n-secret` para n8n. |
 | `GET` / `POST` / `DELETE` | `/api/quick-replies` | Gestionar plantillas de respuestas rápidas e imágenes. |
 | `GET` / `POST` / `DELETE` | `/api/segments` | Segmentación de audiencias. |
 | `GET` / `POST` / `PUT` / `DELETE` | `/api/campaigns` | Campañas de marketing. `POST` guarda siempre como borrador; `PUT` y `DELETE` rechazan con 409 las transiciones y borrados no permitidos por el ciclo de vida. |

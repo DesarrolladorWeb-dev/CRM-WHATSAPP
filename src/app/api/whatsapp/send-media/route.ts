@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireUserPermission } from '@/lib/auth';
-import { sendMediaMessage, type SendMediaOptions, type MediaType } from '@/lib/whatsappService';
+import { requireWriteAccess } from '@/lib/auth';
+import {
+  normalizePhone,
+  sendMediaMessage,
+  type SendMediaOptions,
+  type MediaType,
+} from '@/lib/whatsappService';
 import { connectToPostgres } from '@/lib/postgres';
 import { connectToDatabase, isDbConnected } from '@/lib/mongodb';
 import { MessageModel } from '@/models/Message';
@@ -8,7 +13,8 @@ import { logger, motivo } from '@/lib/logger';
 import { saveMedia } from '@/lib/mediaStorage';
 
 export async function POST(req: NextRequest) {
-  const denied = await requireUserPermission(req, 'write');
+  // Navegador (sesión JWT) o n8n (x-n8n-secret, ver MACHINE_PATHS en lib/auth).
+  const denied = await requireWriteAccess(req, 'write');
   if (denied) return denied;
 
   try {
@@ -71,9 +77,22 @@ export async function POST(req: NextRequest) {
     if (mongoConnected && result.data) {
       const db = await connectToPostgres();
       if (db) {
-        // Buscar conversación activa para este contacto
+        // Buscar conversación activa para este contacto. El teléfono puede
+        // llegar como JID, con '+' o como dígitos pelados; antes se comparaba
+        // texto exacto y una imagen enviada por n8n no encontraba su contacto.
+        const phoneDigits = normalizePhone(phone);
+        const phoneCandidates = Array.from(new Set([
+          phone,
+          phoneDigits,
+          phoneDigits ? `+${phoneDigits}` : '',
+        ].filter(Boolean)));
         const contact = await db.contact.findFirst({
-          where: { phone: phone },
+          where: {
+            OR: [
+              { phone: { in: phoneCandidates } },
+              { handle: phone },
+            ],
+          },
         });
 
         if (contact) {
@@ -83,16 +102,20 @@ export async function POST(req: NextRequest) {
           });
 
         if (conversation) {
-          // El binario (data URL) se escribe en disco; en Mongo solo quedan
-          // la URL y los metadatos. Si el disco falla, se deja sin binario
-          // como hasta ahora (el mensaje igual queda registrado).
+          // El binario (data URL o base64 crudo) se escribe en disco; en Mongo
+          // solo quedan la URL y los metadatos. Si el disco falla, se deja sin
+          // binario como hasta ahora (el mensaje igual queda registrado).
           const msgId = result.data.messageId || `m_sent_${Date.now()}`;
           const esDataUrl = typeof media === 'string' && media.startsWith('data:');
-          const saved = esDataUrl
+          const esUrlRemota = typeof media === 'string' && /^https?:\/\//i.test(media);
+          const esBase64Crudo =
+            typeof media === 'string' && !esDataUrl && !esUrlRemota && !!mimetype;
+          const saved = esDataUrl || esBase64Crudo
             ? await saveMedia({
                 conversationId: conversation.id,
                 messageId: msgId,
-                dataUrl: media,
+                dataUrl: esDataUrl ? media : null,
+                base64: esBase64Crudo ? media : null,
                 mimetype,
               })
             : null;
@@ -108,7 +131,7 @@ export async function POST(req: NextRequest) {
             status: 'sent',
             hasMedia: true,
             mediaType: type,
-            mediaUrl: saved?.url,
+            mediaUrl: saved?.url || (esUrlRemota ? media : undefined),
             media: {
               mimetype: saved?.mimetype || mimetype || 'application/octet-stream',
               data: '',

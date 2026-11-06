@@ -878,6 +878,13 @@ export default function HomePage() {
     text?: string;
     senderName?: string;
     timestamp?: string;
+    // El servicio tambien puede emitir mensajes salientes con multimedia
+    // (por ejemplo cuando n8n envia una imagen). Antes se ignoraban estos
+    // campos y la burbuja aparecia vacia hasta recargar.
+    hasMedia?: boolean;
+    mediaType?: Message['mediaType'];
+    mediaUrl?: string;
+    media?: Message['media'];
   }
 
   const handleOutgoingWhatsAppMessage = (raw: OutgoingWhatsAppMessage) => {
@@ -922,6 +929,10 @@ export default function HomePage() {
       channel: 'whatsapp',
       status: 'sent',
       aiGenerated: true,
+      hasMedia: raw.hasMedia || Boolean(raw.mediaUrl || raw.media?.data),
+      mediaType: raw.mediaType,
+      mediaUrl: raw.mediaUrl,
+      media: raw.media,
     };
 
     setMessagesMap(prev => {
@@ -938,9 +949,10 @@ export default function HomePage() {
 
     // Espejo de bumpLastMessage() en POST /api/messages: último mensaje + sin
     // no leídos (el bot respondió, no hay nada pendiente).
+    const mediaLabel = raw.hasMedia ? getMediaLabel(raw.mediaType) : '';
     setConversations(prev => prev.map(c =>
       c.id === targetId
-        ? { ...c, lastMessage: text || '[Mensaje]', lastMessageTime: 'Ahora', unreadCount: 0 }
+        ? { ...c, lastMessage: text || mediaLabel || '[Mensaje]', lastMessageTime: 'Ahora', unreadCount: 0 }
         : c
     ));
   };
