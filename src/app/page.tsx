@@ -697,18 +697,23 @@ export default function HomePage() {
         body: JSON.stringify({
           messageId,
           from,
-          fromName: pushName,
-          timestamp: raw.timestamp,
+          // `JSON.stringify` borra las claves undefined: si no hay pushName o el
+          // remitente no es un LID, el campo no viaja en vez de ir como ""/null.
+          fromName: pushName || undefined,
+          timestamp: Number.isFinite(Number(raw.timestamp)) ? Number(raw.timestamp) : undefined,
           text,
-          hasMedia: raw.hasMedia,
+          // El servicio manda `null` en los campos que no aplican (mensajes de
+          // solo texto, sin multimedia). Se omiten en vez de enviarlos como
+          // null: el schema los acepta, pero es mas limpio no mandarlos.
+          hasMedia: raw.hasMedia ?? undefined,
           // El binario viene en el evento del socket: sin estos dos campos el
           // backend solo ve la bandera y no hay nada que persistir en disco.
-          mediaType: raw.mediaType,
-          media: raw.media,
+          mediaType: raw.mediaType ?? undefined,
+          media: raw.media ?? undefined,
           receivedAt: receivedAt.toISOString(),
           // Detectar si el from es un LID y enviar los campos adicionales
           isLid: fromIsLid,
-          lidBase,
+          lidBase: lidBase || undefined,
           resolvedPhone,
           rawMessage: raw.rawMessage
         }),

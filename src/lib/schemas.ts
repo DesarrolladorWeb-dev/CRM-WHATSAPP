@@ -507,35 +507,95 @@ const jidWhatsapp = z
 
 const mediaTypeSchema = z.enum(['image', 'audio', 'video', 'document', 'sticker']);
 
-const mediaDataSchema = z
-  .object({
-    mimetype: z.string().min(1).max(100),
-    data: z.string().min(1),
-    size: z.number().int().min(0).optional(),
-    // El nombre viaja a la base de datos y se muestra en el chat: sin barras
-    // ni rutas, que tampoco sirven para nada ahi.
-    filename: z.string().max(200).regex(/^[^/\\]+$/, 'El nombre del archivo no puede contener rutas').nullable().optional(),
-    width: z.number().int().min(0).optional(),
-    height: z.number().int().min(0).optional(),
-  })
-  .strict();
+// El servicio de WhatsApp agrega metadatos propios (por ejemplo `seconds` en
+// audios/videos). Antes era `.strict()` y cualquier clave extra tumbaba el
+// mensaje entero con un 400. Se ignoran las claves desconocidas: los campos de
+// abajo siguen validandose igual.
+const mediaDataSchema = z.object({
+  mimetype: z.string().min(1).max(100),
+  data: z.string().min(1),
+  size: z.number().int().min(0).optional(),
+  // El nombre viaja a la base de datos y se muestra en el chat: sin barras
+  // ni rutas, que tampoco sirven para nada ahi.
+  filename: z.string().max(200).regex(/^[^/\\]+$/, 'El nombre del archivo no puede contener rutas').nullable().optional(),
+  width: z.number().int().min(0).optional(),
+  height: z.number().int().min(0).optional(),
+});
+
+// `timestamp` llega como numero desde el servicio, pero n8n lo envia como
+// texto porque los bodyParameters de HTTP Request son cadenas. Antes el
+// string tumbaba el payload con 400. Si no es un instante valido se descarta:
+// la fecha de recepcion real se toma de `receivedAt`.
+const timestampDeIntegracion = z
+  .union([z.number(), z.string()])
+  .nullable()
+  .optional()
+  .transform((valor) => {
+    if (valor === undefined || valor === null || valor === '') return undefined;
+    const numero = typeof valor === 'number' ? valor : Number(valor);
+    if (!Number.isFinite(numero) || numero < 0) return undefined;
+    return Math.trunc(numero);
+  });
+
+// Un JID opcional que puede venir como null desde el navegador (`lidBase` se
+// calcula solo cuando el remitente es un LID). La cadena vacia se trata como
+// ausente para no repetir el 400 que provocaba `lidBase: null`.
+const jidOpcional = jidWhatsapp
+  .nullable()
+  .optional()
+  .transform((valor) => (valor ? valor : undefined));
 
 export const incomingPayloadSchema = z
   .object({
-    messageId: z.string().min(1).max(64).optional(),
+    messageId: z
+      .string()
+      .min(1)
+      .max(64)
+      .nullish()
+      .transform((valor) => valor ?? undefined),
     // `from` es el JID ("51953123123@s.whatsapp.net" o "273...@lid") o, si
     // no hay JID, un nombre suelto. De ahi viene la confusion historica que
     // hizo que un contacto se llamara "+51 213 123 123".
-    from: z.string().min(1).max(64).optional(),
-    fromName: z.string().min(1).max(50).optional(),
-    timestamp: z.number().int().min(0).optional(),
-    text: z.string().max(5000, 'El mensaje no puede pasar de 5000 caracteres').optional(),
-    hasMedia: z.boolean().optional(),
-    mediaType: mediaTypeSchema.optional(),
-    media: mediaDataSchema.optional(),
-    receivedAt: z.string().max(40).optional(),
-    isLid: z.boolean().optional(),
-    lidBase: jidWhatsapp.optional(),
+    from: z
+      .string()
+      .min(1)
+      .max(64)
+      .nullish()
+      .transform((valor) => valor ?? undefined),
+    // WhatsApp no publica nombre para todos los contactos: puede llegar vacio
+    // o null. El servidor ya aplica su respaldo (telefono -> etiqueta neutra),
+    // asi que aqui no se rechaza. Se normaliza a `undefined` para no guardar "".
+    fromName: z
+      .string()
+      .max(50)
+      .nullish()
+      .transform((valor) => (valor && valor.trim() ? valor : undefined)),
+    timestamp: timestampDeIntegracion,
+    text: z
+      .string()
+      .max(5000, 'El mensaje no puede pasar de 5000 caracteres')
+      .nullish()
+      .transform((valor) => valor ?? undefined),
+    hasMedia: z
+      .boolean()
+      .nullish()
+      .transform((valor) => valor ?? undefined),
+    mediaType: mediaTypeSchema
+      .nullish()
+      .transform((valor) => valor ?? undefined),
+    media: mediaDataSchema
+      .nullish()
+      .transform((valor) => valor ?? undefined),
+    receivedAt: z
+      .string()
+      .max(40)
+      .nullish()
+      .transform((valor) => valor ?? undefined),
+    isLid: z
+      .boolean()
+      .nullish()
+      .transform((valor) => valor ?? undefined),
+    lidBase: jidOpcional,
     // `resolvedPhone` se guardaba tal cual en contacts.phone y de ahi llega a
     // campaign_recipients.address, que es la direccion a la que se envia. Por
     // eso pasa por una regla, pero permisiva y normalizadora: lo que llega sin
