@@ -41,7 +41,11 @@ export function extractApiKey(req: NextRequest): string | null {
  * isMachineAllowedPath): escribir mensajes/entrantes, nada destructivo.
  * Comparación en tiempo constante para no filtrar el secreto por timing.
  */
-const MACHINE_PATHS = ['/api/whatsapp/webhook', '/api/messages'];
+const MACHINE_PATHS = [
+  '/api/whatsapp/webhook',
+  '/api/whatsapp/send-media',
+  '/api/messages',
+];
 
 function machineSecret(): string {
   return process.env.N8N_WEBHOOK_SECRET || process.env.WHATSAPP_WEBHOOK_SECRET || '';
