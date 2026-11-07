@@ -205,6 +205,84 @@ describe('payload entrante de WhatsApp', () => {
     expect(r.success).toBe(true);
   });
 
+  it('acepta el payload real cuando no hay pushName ni LID', () => {
+    // El navegador manda `fromName: ""` cuando WhatsApp no publica nombre y
+    // `lidBase: null` cuando el remitente no es un LID. Con `min(1)` y sin
+    // `.nullable()`, casi todos los mensajes normales devolvian 400 y no
+    // llegaban al CRM.
+    const cuerpo = {
+      messageId: '3EB0A7C2',
+      from: '51987654321@s.whatsapp.net',
+      fromName: '',
+      timestamp: 1763000000,
+      text: 'hola',
+      hasMedia: false,
+      receivedAt: '2026-01-01T00:00:00.000Z',
+      isLid: false,
+      lidBase: null,
+      resolvedPhone: '+51987654321',
+    };
+    const r = incomingPayloadSchema.safeParse(cuerpo);
+    expect(r.success).toBe(true);
+    if (r.success) {
+      expect(r.data.fromName).toBeUndefined();
+      expect(r.data.lidBase).toBeUndefined();
+      expect(r.data.resolvedPhone).toBe('+51987654321');
+    }
+  });
+
+  it('acepta null en los campos opcionales (mensaje de solo texto)', () => {
+    // El servicio emite `mediaType: null` y `media: null` cuando el mensaje no
+    // tiene multimedia. Antes `optional()` no aceptaba `null` y esos mensajes
+    // seguian devolviendo 400 aunque ya no tuvieran fromName vacio ni lidBase.
+    const r = incomingPayloadSchema.safeParse({
+      messageId: '3EB0A7C3',
+      from: '105609621975186@lid',
+      fromName: '',
+      timestamp: 1794066228,
+      text: 'hola',
+      hasMedia: false,
+      mediaType: null,
+      media: null,
+      receivedAt: '2026-11-07T15:43:48.141Z',
+      isLid: true,
+      lidBase: '105609621975186',
+      resolvedPhone: '51966374980',
+      rawMessage: { key: { id: '3EB0A7C3' }, message: { conversation: 'hola' } },
+    });
+    expect(r.success).toBe(true);
+    if (r.success) {
+      expect(r.data.mediaType).toBeUndefined();
+      expect(r.data.media).toBeUndefined();
+      expect(r.data.resolvedPhone).toBe('+51966374980');
+    }
+  });
+
+  it('acepta el timestamp como texto (n8n manda strings)', () => {
+    const r = incomingPayloadSchema.safeParse({ ...valido, timestamp: '1763000000' });
+    expect(r.success).toBe(true);
+    if (r.success) expect(r.data.timestamp).toBe(1763000000);
+  });
+
+  it('ignora metadatos extra dentro de media', () => {
+    // El servicio agrega `seconds` en audios/videos. Antes `.strict()` en
+    // mediaDataSchema rechazaba el mensaje completo.
+    const media = { mimetype: 'audio/ogg', data: 'T2dnUw==', seconds: 12, ptt: true };
+    const r = incomingPayloadSchema.safeParse({ ...valido, hasMedia: true, mediaType: 'audio', media });
+    expect(r.success).toBe(true);
+  });
+
+  it('acepta un payload LID sin numero resuelto', () => {
+    const r = incomingPayloadSchema.safeParse({
+      ...valido,
+      from: '273404951326886@lid',
+      isLid: true,
+      lidBase: '273404951326886',
+      resolvedPhone: null,
+    });
+    expect(r.success).toBe(true);
+  });
+
   it('no rompe los botones: rawMessage llega intacto al parseo', () => {
     // parseInteractive() (ingest.ts) depende de este campo para traducir los
     // botones a texto, e InteractiveButtons.tsx los dibuja en el chat. Si el
