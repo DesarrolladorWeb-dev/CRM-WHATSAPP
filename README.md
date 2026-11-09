@@ -395,7 +395,6 @@ y procedimientos paso a paso para cada escenario de pérdida de datos.
 | `GET` / `POST` / `PUT` / `DELETE` | `/api/contacts` | CRUD de contactos / leads (`DELETE` no está conectado a la interfaz todavía). |
 | `GET` / `POST` / `PUT` | `/api/conversations` | Listar y actualizar hilos de conversación. |
 | `GET` / `POST` | `/api/messages` | Listar y enviar mensajes en el chat. Acepta `mediaUrl` (URL o data URL) y `media` (base64 + mimetype) para mensajes con imagen. |
-| `POST` | `/api/whatsapp/webhook` | Mensajes entrantes. Acepta `channel` (`whatsapp`, `instagram`, `twitter`, `messenger`, `email`); si se omite se asume WhatsApp. |
 | `POST` | `/api/whatsapp/send-media` | Envía multimedia por WhatsApp y registra el mensaje en el chat. Acepta `x-n8n-secret` para n8n. |
 | `GET` / `POST` / `DELETE` | `/api/quick-replies` | Gestionar plantillas de respuestas rápidas e imágenes. |
 | `GET` / `POST` / `DELETE` | `/api/segments` | Segmentación de audiencias. |

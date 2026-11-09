@@ -1,10 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import {
-  contactCreateSchema,
-  campaignCreateSchema,
-  apiKeyCreateSchema,
-  incomingPayloadSchema,
-} from '@/lib/schemas';
+import { contactCreateSchema, campaignCreateSchema, apiKeyCreateSchema } from '@/lib/schemas';
 
 const contactoValido = {
   name: 'Valeria Gomez',
@@ -79,29 +74,6 @@ describe('apiKeyCreateSchema', () => {
 
   it('rechaza un permiso con formato invalido', () => {
     const res = apiKeyCreateSchema.safeParse({ name: 'X', permissions: ['DROP TABLE;'] });
-    expect(res.success).toBe(false);
-  });
-});
-
-describe('incomingPayloadSchema', () => {
-  it('asume WhatsApp cuando la integracion no envia canal', () => {
-    const res = incomingPayloadSchema.safeParse({ from: '51987654321', text: 'hola' });
-    expect(res.success).toBe(true);
-    if (res.success) expect(res.data.channel).toBe('whatsapp');
-  });
-
-  it('respeta el canal de origen cuando la integracion lo envia', () => {
-    const res = incomingPayloadSchema.safeParse({
-      from: 'elena.rostova',
-      channel: 'instagram',
-      text: 'hola',
-    });
-    expect(res.success).toBe(true);
-    if (res.success) expect(res.data.channel).toBe('instagram');
-  });
-
-  it('rechaza un canal desconocido', () => {
-    const res = incomingPayloadSchema.safeParse({ from: 'x', channel: 'telegram' });
     expect(res.success).toBe(false);
   });
 });
