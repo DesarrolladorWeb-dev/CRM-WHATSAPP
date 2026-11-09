@@ -554,12 +554,13 @@ export const incomingPayloadSchema = z
       .nullish()
       .transform((valor) => valor ?? undefined),
     // `from` es el JID ("51953123123@s.whatsapp.net" o "273...@lid") o, si
-    // no hay JID, un nombre suelto. De ahi viene la confusion historica que
-    // hizo que un contacto se llamara "+51 213 123 123".
+    // no hay JID, un nombre suelto. En los demas canales es el @usuario, el id
+    // de la red o el correo del remitente. De ahi viene la confusion historica
+    // que hizo que un contacto se llamara "+51 213 123 123".
     from: z
       .string()
       .min(1)
-      .max(64)
+      .max(254)
       .nullish()
       .transform((valor) => valor ?? undefined),
     // WhatsApp no publica nombre para todos los contactos: puede llegar vacio
@@ -570,6 +571,14 @@ export const incomingPayloadSchema = z
       .max(50)
       .nullish()
       .transform((valor) => (valor && valor.trim() ? valor : undefined)),
+    // Canal por el que entra el mensaje. Las integraciones omnicanal (n8n,
+    // Instagram, Messenger, X, email) reutilizan este mismo endpoint; antes el
+    // campo no existia y el servidor daba por hecho que todo era WhatsApp.
+    // Se acepta null/vacio y se asume WhatsApp para no romper a los clientes
+    // actuales (page.tsx y la Cloud API), que no lo envian.
+    channel: socialChannel
+      .nullish()
+      .transform((valor) => valor || 'whatsapp'),
     timestamp: timestampDeIntegracion,
     text: z
       .string()

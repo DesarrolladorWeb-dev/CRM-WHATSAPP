@@ -11,12 +11,12 @@ import { avatarPara } from '@/lib/avatar';
 import { DEMO_MODE, dbUnavailableResponse } from '@/lib/demo';
 import { captureException, logger, motivo } from '@/lib/logger';
 import { saveMedia, type SavedMedia } from '@/lib/mediaStorage';
-import type { Contact, Conversation } from '@/types';
+import type { Contact, Conversation, SocialChannel } from '@/types';
 import { requireUserPermission } from '@/lib/auth';
 import { formatTimeFromIso } from '@/lib/time';
 import { interactiveToText, parseInteractive } from '@/lib/whatsappInteractive';
 
-// Logica compartida de recepcion de mensajes entrantes de WhatsApp.
+// Logica compartida de recepcion de mensajes entrantes.
 //
 // La consumen dos rutas:
 //   - POST /api/whatsapp/incoming  (el navegador, con x-api-key)
@@ -24,6 +24,10 @@ import { interactiveToText, parseInteractive } from '@/lib/whatsappInteractive';
 // Ambas garantizan que cada mensaje quede guardado como contacto + conversacion
 // (Postgres) y como mensaje (MongoDB), para que aparezca en los chats recientes
 // aunque el CRM se recargue o el navegador estuviera cerrado.
+//
+// Aunque la ruta viva bajo /api/whatsapp, el payload acepta `channel` para que
+// las integraciones omnicanal (Instagram, Messenger, X, email) reutilicen el
+// mismo punto de entrada sin que el servidor las etiquete como WhatsApp.
 
 export type MediaType = 'image' | 'audio' | 'video' | 'document' | 'sticker';
 
@@ -40,6 +44,9 @@ export interface IncomingPayload {
   messageId?: string;
   from?: string;
   fromName?: string;
+  // Canal de origen. Si falta se asume WhatsApp, que es el comportamiento
+  // historico de este endpoint.
+  channel?: SocialChannel;
   timestamp?: number;
   text?: string;
   hasMedia?: boolean;
@@ -50,7 +57,7 @@ export interface IncomingPayload {
   isLid?: boolean;
   lidBase?: string;
   resolvedPhone?: string;
-  rawMessage?: any
+  rawMessage?: unknown;
 }
 
 function sanitizeName(raw: string | undefined, fallback: string): string {
@@ -63,8 +70,30 @@ function sanitizeName(raw: string | undefined, fallback: string): string {
   return cleaned || fallback;
 }
 
-/** Etiqueta para un contacto del que WhatsApp no publica ningun nombre. */
-const SIN_NOMBRE = 'Contacto WhatsApp';
+/** Nombre visible de cada canal, para notas y etiquetas de respaldo. */
+const CHANNEL_LABEL: Record<SocialChannel, string> = {
+  whatsapp: 'WhatsApp',
+  instagram: 'Instagram',
+  twitter: 'X/Twitter',
+  messenger: 'Messenger',
+  email: 'Email',
+};
+
+/**
+ * Limpia el identificador publico de una red social.
+ *
+ * En WhatsApp `from` es un telefono/JID; en Instagram, Messenger y X es un
+ * @usuario o un id numerico; en email, una direccion. Se conservan los
+ * caracteres que forman parte de un handle valido y se descarta el resto para
+ * que un valor con HTML o espacios no acabe guardado tal cual en la ficha.
+ */
+function sanitizeHandle(raw: string, channel: SocialChannel): string {
+  const base = String(raw ?? '').trim().replace(/^@+/, '');
+  if (channel === 'email') {
+    return base.toLowerCase().replace(/[^a-z0-9@._+-]/gi, '').slice(0, 120);
+  }
+  return base.replace(/[^a-zA-Z0-9._-]/g, '').slice(0, 64);
+}
 
 /**
  * Si el nombre identifica a una persona o es solo un marcador de posicion.
@@ -80,23 +109,26 @@ const SIN_NOMBRE = 'Contacto WhatsApp';
 function esNombreReal(nombre: string | null | undefined): boolean {
   const limpio = String(nombre ?? '').trim();
   if (!limpio) return false;
-  if (limpio === SIN_NOMBRE || limpio === 'Desconocido') return false;
+  if (limpio === 'Desconocido') return false;
+  // "Contacto WhatsApp", "Contacto Instagram"... son etiquetas de respaldo,
+  // no nombres: no deben generar iniciales.
+  if (/^Contacto\b/.test(limpio)) return false;
   if (limpio.startsWith('+')) return false;
   if (/^Cliente \d+$/.test(limpio)) return false;
   return /^\p{L}/u.test(limpio);
 }
 
 /**
- * Como se llama un contacto que llega por WhatsApp.
+ * Como se llama un contacto que llega por un canal.
  *
- * `fromName` es el pushName: el nombre que cada persona pone en SU propio
- * WhatsApp, no la agenda de nadie. Llega vacio a menudo (cuentas sin nombre
- * configurado, canales, mensajes reenviados), y entonces hay que degradar con
- * cabeza en vez de escribir "Desconocido" en la ficha:
+ * `fromName` es el nombre que publica la persona (pushName en WhatsApp). Llega
+ * vacio a menudo (cuentas sin nombre configurado, canales, mensajes
+ * reenviados), y entonces hay que degradar con cabeza en vez de escribir
+ * "Desconocido" en la ficha:
  *
  *   1. El nombre que publique la persona.
- *   2. Su telefono formateado, "+51 953 740 108", que identifica igual de bien.
- *   3. Una etiqueta neutra, solo cuando no hay ni nombre ni telefono.
+ *   2. Su telefono formateado (WhatsApp) o su @usuario (resto de canales).
+ *   3. Una etiqueta neutra, solo cuando no hay ni nombre ni identificador.
  *
  * El caso 3 son los LID sin resolver: WhatsApp identifica a esa cuenta con un
  * id opaco ("105450053869643@lid") y no entrega el telefono. Ese id NO se
@@ -108,14 +140,21 @@ function esNombreReal(nombre: string | null | undefined): boolean {
  */
 function resolverNombre(
   fromName: string | undefined,
-  telefono: string | null
+  telefono: string | null,
+  handle: string | null,
+  fallback: string
 ): { nombre: string; tieneNombre: boolean } {
   const propuesto = sanitizeName(fromName, '');
   if (propuesto) return { nombre: propuesto, tieneNombre: true };
 
   if (telefono) return { nombre: formatPhoneDisplay(telefono), tieneNombre: false };
 
-  return { nombre: SIN_NOMBRE, tieneNombre: false };
+  const usuario = String(handle ?? '').replace(/^@+/, '').trim();
+  if (usuario) {
+    return { nombre: usuario.slice(0, 50), tieneNombre: /^\p{L}/u.test(usuario) };
+  }
+
+  return { nombre: fallback, tieneNombre: false };
 }
 
 function displayTime(iso: string | undefined): string {
@@ -128,6 +167,7 @@ function contactToApi(row: {
   name: string;
   handle: string;
   phone?: string | null;
+  email?: string | null;
   sentiment?: string | null;
   leadScore?: number | null;
   stage?: string | null;
@@ -137,6 +177,7 @@ function contactToApi(row: {
   company?: string | null;
   avatarUrl?: string | null;
   avatar?: string;
+  channel?: string | null;
 }): Contact {
   return {
     id: row.id,
@@ -147,7 +188,7 @@ function contactToApi(row: {
     avatar: row.avatarUrl || row.avatar || avatarPara(row.name || row.id, esNombreReal(row.name)),
     handle: row.handle,
     phone: row.phone ?? undefined,
-    channel: 'whatsapp',
+    channel: (row.channel as SocialChannel) || 'whatsapp',
     tags: [],
     sentiment: 'neutral',
     leadScore: row.leadScore ?? 50,
@@ -190,7 +231,7 @@ export async function handleIncomingPayload(body: IncomingPayload): Promise<Next
   // webhook) compartan exactamente la misma regla.
   const parseo = incomingPayloadSchema.safeParse(body);
   if (!parseo.success) {
-    logger.warn('Payload entrante de WhatsApp rechazado', {
+    logger.warn('Payload entrante rechazado', {
       motivo: parseo.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join(' | '),
     });
     return NextResponse.json(
@@ -202,9 +243,25 @@ export async function handleIncomingPayload(body: IncomingPayload): Promise<Next
 
   try {
     const messageId = String(body.messageId || `m_inc_${Date.now()}`);
-    const phone = normalizePhone(body.from || body.fromName || '');
-    if (!phone) {
+    const channel = (body.channel || 'whatsapp') as SocialChannel;
+    const esWhatsApp = channel === 'whatsapp';
+    const fromRaw = String(body.from || body.fromName || '').trim();
+
+    // En WhatsApp `from` es un JID o un telefono. En el resto de canales es el
+    // identificador publico de la persona (un @usuario, un id de la red o un
+    // correo). normalizePhone() lo reduciria a digitos y perderia el handle,
+    // asi que solo se aplica a WhatsApp.
+    const phone = esWhatsApp ? normalizePhone(fromRaw) : '';
+    const socialHandle = esWhatsApp ? '' : sanitizeHandle(fromRaw, channel);
+
+    if (esWhatsApp && !phone) {
       return NextResponse.json({ success: false, error: 'Falta el numero del remitente' }, { status: 400 });
+    }
+    if (!esWhatsApp && !socialHandle) {
+      return NextResponse.json(
+        { success: false, error: `Falta el identificador del remitente para ${CHANNEL_LABEL[channel]}` },
+        { status: 400 }
+      );
     }
 
     const interactive = parseInteractive(body.rawMessage)
@@ -214,14 +271,20 @@ export async function handleIncomingPayload(body: IncomingPayload): Promise<Next
 
     // Determinar el identificador único del contacto
     // Si es un LID, usar el lidBase como handle único
-    // Si no, usar el phone normalizado
-    const isLid = body.isLid || false;
-    const lidBase = body.lidBase || null;
+    // Si no, usar el phone normalizado (WhatsApp) o el handle social.
+    const isLid = esWhatsApp && (body.isLid || false);
+    const lidBase = esWhatsApp ? body.lidBase || null : null;
     const resolvedPhone = body.resolvedPhone || null;
 
     // El handle único del contacto: si es LID, guardar el JID completo (ej: "273404951326886@lid")
-    // para que al enviar se detecte que es un LID y se use directamente
-    const contactHandle = isLid && body.from ? body.from : phone;
+    // para que al enviar se detecte que es un LID y se use directamente.
+    const contactHandle = esWhatsApp
+      ? (isLid && body.from ? body.from : phone)
+      : socialHandle;
+
+    // En email el identificador es la propia direccion, asi que se guarda
+    // tambien en la columna `email` para que la ficha quede completa.
+    const contactEmail = channel === 'email' ? socialHandle : undefined;
 
     // El telefono del contacto. Para un LID solo vale el numero que haya
     // resuelto el servicio: `phone` seria entonces el id opaco del LID, que
@@ -244,53 +307,80 @@ export async function handleIncomingPayload(body: IncomingPayload): Promise<Next
     // contacto se guardaria SIN telefono. Ademas, anteponerlo a mano respeta
     // el codigo de pais que venga, que es lo que necesita un numero de otro
     // pais.
-    const contactPhone = resolvedPhone || (!isLid && phone.length >= 10 ? `+${phone}` : null);
+    const contactPhone =
+      resolvedPhone || (esWhatsApp && !isLid && phone.length >= 10 ? `+${phone}` : null);
 
-    const { nombre: name, tieneNombre } = resolverNombre(body.fromName, contactPhone);
+    const { nombre: name, tieneNombre } = resolverNombre(
+      body.fromName,
+      contactPhone,
+      esWhatsApp ? null : contactHandle,
+      `Contacto ${CHANNEL_LABEL[channel]}`
+    );
     const avatar = avatarPara(name, tieneNombre);
 
     const db = await connectToPostgres();
     if (!db) {
       if (DEMO_MODE) {
-        return NextResponse.json({ success: true, source: 'demo', data: { incomingId: messageId, phone, name, text } });
+        return NextResponse.json({
+          success: true,
+          source: 'demo',
+          data: { incomingId: messageId, channel, handle: contactHandle, phone, name, text },
+        });
       }
       return dbUnavailableResponse();
     }
 
-    // 1. Contacto: reutilizar el existente por handle/telefono o crear nuevo.
-    // Buscar por handle O por phone (si el phone parece un número válido)
+    // 1. Contacto: reutilizar el existente por handle/telefono/email o crear uno
+    // nuevo. En redes sociales el handle puede venir con o sin '@' segun la
+    // integracion, asi que se buscan las dos formas antes de crear duplicados.
     let contact: Parameters<typeof contactToApi>[0] | null = null;
-    
-    // Primero intentar buscar por handle exacto
+
+    const handleVariantes = Array.from(
+      new Set([contactHandle, `@${contactHandle}`, contactHandle.replace(/^@+/, '')].filter(Boolean))
+    );
     contact = await db.contact.findFirst({
-      where: { handle: contactHandle },
+      where: { handle: { in: handleVariantes } },
     });
-    
+
+    if (!contact && contactEmail) {
+      contact = await db.contact.findFirst({ where: { email: contactEmail } });
+    }
+
     // Si no se encontró por handle y tenemos un phone válido, buscar por phone
     if (!contact && contactPhone) {
       contact = await db.contact.findFirst({
         where: { phone: contactPhone },
       });
     }
-    
+
     let isNewContact = false;
     if (!contact) {
-      // Crear nuevo contacto
+      // Crear nuevo contacto.
       // Si es LID y no tenemos número resuelto, guardar el LID como handle
-      // y dejar phone vacío (se actualizará cuando se resuelva el número)
-      contact = await upsertContact(db, `c_wa_${phone}_${isLid ? 'lid' : 'num'}`, {
+      // y dejar phone vacío (se actualizará cuando se resuelva el número).
+      // En el resto de canales el id se deriva del canal + handle para que dos
+      // personas distintas de la misma red no compartan ficha.
+      const contactId = esWhatsApp
+        ? `c_wa_${phone}_${isLid ? 'lid' : 'num'}`
+        : `c_${channel}_${createHash('sha1')
+            .update(`${channel}:${contactHandle}`)
+            .digest('hex')
+            .slice(0, 12)}`;
+
+      contact = await upsertContact(db, contactId, {
         name,
         avatar,
         handle: contactHandle,
         phone: contactPhone,
-        channel: 'whatsapp',
+        email: contactEmail,
+        channel,
         sentiment: 'neutral',
         leadScore: 50,
         stage: 'lead',
         dealValue: 0,
-        notes: isLid 
+        notes: isLid
           ? `Contacto creado desde WhatsApp (LID: ${lidBase}). El número real aún no se ha resuelto.`
-          : 'Contacto creado automaticamente desde WhatsApp.',
+          : `Contacto creado automaticamente desde ${CHANNEL_LABEL[channel]}.`,
         lastActive: 'Ahora',
         company: '',
       });
@@ -303,6 +393,14 @@ export async function handleIncomingPayload(body: IncomingPayload): Promise<Next
           data: { phone: contactPhone },
         });
         contact.phone = contactPhone;
+      }
+      // Lo mismo con el email cuando el mensaje entra por ese canal.
+      if (!contact.email && contactEmail) {
+        await db.contact.update({
+          where: { id: contact.id },
+          data: { email: contactEmail },
+        });
+        contact.email = contactEmail;
       }
       // Si el contacto ya existe pero su handle es solo dígitos (sin @lid) y el incoming es LID,
       // actualizar el handle para incluir @lid (necesario para enviar mensajes)
@@ -321,9 +419,23 @@ export async function handleIncomingPayload(body: IncomingPayload): Promise<Next
         });
         contact.handle = contactHandle;
       }
+      // Contactos creados antes de este arreglo pudieron quedar marcados como
+      // WhatsApp aunque su primer mensaje llegara por otra red. Se corrige solo
+      // cuando la ficha no tiene telefono (un contacto real de WhatsApp siempre
+      // lo tiene o es un LID), para no reescribir el canal de quien de verdad
+      // usa WhatsApp.
+      if (
+        !esWhatsApp &&
+        contact.channel === 'whatsapp' &&
+        !contact.phone &&
+        !String(contact.handle || '').endsWith('@lid')
+      ) {
+        await db.contact.update({ where: { id: contact.id }, data: { channel } });
+        contact.channel = channel;
+      }
     }
 
-    // 2. Conversacion: una por contacto en el canal whatsapp.
+    // 2. Conversacion: una por contacto y canal.
     let conversation: {
       id: string;
       contactId: string;
@@ -334,16 +446,23 @@ export async function handleIncomingPayload(body: IncomingPayload): Promise<Next
       status: string;
       assignedAgent: string;
     } | null = await db.conversation.findFirst({
-      where: { contactId: contact.id, channel: 'whatsapp' },
+      where: { contactId: contact.id, channel },
       orderBy: { updatedAt: 'desc' },
     });
     let isNewConversation = false;
     const mediaLabel = body.hasMedia ? getMediaLabel(body.mediaType) : '';
     const lastMsgText = text || mediaLabel || '[Mensaje]';
     if (!conversation) {
-      conversation = await upsertConversation(db, `conv_wa_${phone}_${isLid ? 'lid' : 'num'}`, {
+      // El id de WhatsApp conserva el formato historico (conv_wa_...) para no
+      // duplicar conversaciones ya existentes. El resto de canales usa un id
+      // estable derivado del contacto, de modo que cada red tenga su propio hilo.
+      const conversationId = esWhatsApp
+        ? `conv_wa_${phone}_${isLid ? 'lid' : 'num'}`
+        : `conv_${channel}_${contact.id}`;
+
+      conversation = await upsertConversation(db, conversationId, {
         contactId: contact.id,
-        channel: 'whatsapp',
+        channel,
         unreadCount: 0,
         lastMessage: lastMsgText,
         lastMessageTime: timestampLbl,
@@ -423,7 +542,7 @@ export async function handleIncomingPayload(body: IncomingPayload): Promise<Next
             senderName: name,
             // text,
             timestamp: timestampLbl,
-            channel: 'whatsapp',
+            channel,
             status: 'read',
             createdAt: receivedAt,
           },
@@ -438,7 +557,7 @@ export async function handleIncomingPayload(body: IncomingPayload): Promise<Next
       id: conversation.id,
       contactId: conversation.contactId,
       contact: contactApi,
-      channel: 'whatsapp',
+      channel,
       unreadCount: (conversation.unreadCount || 0) + 1,
       lastMessage: lastMsgText,
       lastMessageTime: 'Ahora',
@@ -460,7 +579,7 @@ export async function handleIncomingPayload(body: IncomingPayload): Promise<Next
           senderName: name,
           text,
           timestamp: timestampLbl,
-          channel: 'whatsapp',
+          channel,
           status: 'read',
           hasMedia: body.hasMedia || false,
           mediaType: body.mediaType,
@@ -468,6 +587,8 @@ export async function handleIncomingPayload(body: IncomingPayload): Promise<Next
           mediaUrl: savedMediaUrl,
           interactive: interactive ?? undefined
         },
+        channel,
+        handle: contactHandle,
         phone: isLid ? lidBase : phone,
         contactPhone,
         isLid,
