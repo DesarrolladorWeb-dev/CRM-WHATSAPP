@@ -413,6 +413,7 @@ export const ModelName = {
   CampaignRecipient: 'CampaignRecipient',
   AutomationRule: 'AutomationRule',
   AutomationAction: 'AutomationAction',
+  QuickReplyCategory: 'QuickReplyCategory',
   QuickReply: 'QuickReply',
   PresetImage: 'PresetImage',
   WebhookConfig: 'WebhookConfig'
@@ -431,7 +432,7 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
     omit: GlobalOmitOptions
   }
   meta: {
-    modelProps: "user" | "session" | "apiKey" | "contact" | "tag" | "contactTag" | "contactInteraction" | "conversation" | "segment" | "segmentChannel" | "segmentStage" | "segmentTag" | "campaign" | "campaignRecipient" | "automationRule" | "automationAction" | "quickReply" | "presetImage" | "webhookConfig"
+    modelProps: "user" | "session" | "apiKey" | "contact" | "tag" | "contactTag" | "contactInteraction" | "conversation" | "segment" | "segmentChannel" | "segmentStage" | "segmentTag" | "campaign" | "campaignRecipient" | "automationRule" | "automationAction" | "quickReplyCategory" | "quickReply" | "presetImage" | "webhookConfig"
     txIsolationLevel: TransactionIsolationLevel
   }
   model: {
@@ -1619,6 +1620,80 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
         }
       }
     }
+    QuickReplyCategory: {
+      payload: Prisma.$QuickReplyCategoryPayload<ExtArgs>
+      fields: Prisma.QuickReplyCategoryFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.QuickReplyCategoryFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$QuickReplyCategoryPayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.QuickReplyCategoryFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$QuickReplyCategoryPayload>
+        }
+        findFirst: {
+          args: Prisma.QuickReplyCategoryFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$QuickReplyCategoryPayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.QuickReplyCategoryFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$QuickReplyCategoryPayload>
+        }
+        findMany: {
+          args: Prisma.QuickReplyCategoryFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$QuickReplyCategoryPayload>[]
+        }
+        create: {
+          args: Prisma.QuickReplyCategoryCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$QuickReplyCategoryPayload>
+        }
+        createMany: {
+          args: Prisma.QuickReplyCategoryCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.QuickReplyCategoryCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$QuickReplyCategoryPayload>[]
+        }
+        delete: {
+          args: Prisma.QuickReplyCategoryDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$QuickReplyCategoryPayload>
+        }
+        update: {
+          args: Prisma.QuickReplyCategoryUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$QuickReplyCategoryPayload>
+        }
+        deleteMany: {
+          args: Prisma.QuickReplyCategoryDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.QuickReplyCategoryUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.QuickReplyCategoryUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$QuickReplyCategoryPayload>[]
+        }
+        upsert: {
+          args: Prisma.QuickReplyCategoryUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$QuickReplyCategoryPayload>
+        }
+        aggregate: {
+          args: Prisma.QuickReplyCategoryAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateQuickReplyCategory>
+        }
+        groupBy: {
+          args: Prisma.QuickReplyCategoryGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.QuickReplyCategoryGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.QuickReplyCategoryCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.QuickReplyCategoryCountAggregateOutputType> | number
+        }
+      }
+    }
     QuickReply: {
       payload: Prisma.$QuickReplyPayload<ExtArgs>
       fields: Prisma.QuickReplyFieldRefs
@@ -2099,6 +2174,18 @@ export const AutomationActionScalarFieldEnum = {
 export type AutomationActionScalarFieldEnum = (typeof AutomationActionScalarFieldEnum)[keyof typeof AutomationActionScalarFieldEnum]
 
 
+export const QuickReplyCategoryScalarFieldEnum = {
+  id: 'id',
+  label: 'label',
+  icon: 'icon',
+  color: 'color',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+} as const
+
+export type QuickReplyCategoryScalarFieldEnum = (typeof QuickReplyCategoryScalarFieldEnum)[keyof typeof QuickReplyCategoryScalarFieldEnum]
+
+
 export const QuickReplyScalarFieldEnum = {
   id: 'id',
   title: 'title',
@@ -2424,6 +2511,7 @@ export type GlobalOmitConfig = {
   campaignRecipient?: Prisma.CampaignRecipientOmit
   automationRule?: Prisma.AutomationRuleOmit
   automationAction?: Prisma.AutomationActionOmit
+  quickReplyCategory?: Prisma.QuickReplyCategoryOmit
   quickReply?: Prisma.QuickReplyOmit
   presetImage?: Prisma.PresetImageOmit
   webhookConfig?: Prisma.WebhookConfigOmit

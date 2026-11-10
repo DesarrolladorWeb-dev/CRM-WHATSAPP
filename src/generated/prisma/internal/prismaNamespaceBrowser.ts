@@ -67,6 +67,7 @@ export const ModelName = {
   CampaignRecipient: 'CampaignRecipient',
   AutomationRule: 'AutomationRule',
   AutomationAction: 'AutomationAction',
+  QuickReplyCategory: 'QuickReplyCategory',
   QuickReply: 'QuickReply',
   PresetImage: 'PresetImage',
   WebhookConfig: 'WebhookConfig'
@@ -305,6 +306,18 @@ export const AutomationActionScalarFieldEnum = {
 } as const
 
 export type AutomationActionScalarFieldEnum = (typeof AutomationActionScalarFieldEnum)[keyof typeof AutomationActionScalarFieldEnum]
+
+
+export const QuickReplyCategoryScalarFieldEnum = {
+  id: 'id',
+  label: 'label',
+  icon: 'icon',
+  color: 'color',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+} as const
+
+export type QuickReplyCategoryScalarFieldEnum = (typeof QuickReplyCategoryScalarFieldEnum)[keyof typeof QuickReplyCategoryScalarFieldEnum]
 
 
 export const QuickReplyScalarFieldEnum = {

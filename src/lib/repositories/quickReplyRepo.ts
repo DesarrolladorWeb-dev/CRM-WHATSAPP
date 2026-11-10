@@ -37,7 +37,7 @@ export async function upsertQuickReply(
   const scalar = scalarData(input);
   const row = await db.quickReply.upsert({
     where: { id },
-    update: scalar as Prisma.QuickReplyUpdateInput,
+    update: scalar as Prisma.QuickReplyUncheckedUpdateInput,
     create: { ...(scalar as Prisma.QuickReplyUncheckedCreateInput), id, title: input.title ?? id },
   });
   return toApiQuickReply(row);

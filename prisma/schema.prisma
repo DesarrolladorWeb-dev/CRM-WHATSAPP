@@ -342,6 +342,19 @@ model AutomationAction {
 // Contenido auxiliar
 // ---------------------------------------------------------------------------
 
+model QuickReplyCategory {
+  // El id es una clave estable (p. ej. "saludo") usada por las respuestas rápidas.
+  id           String       @id
+  label        String       @unique
+  icon         String       @default("Tag")
+  color        String       @default("bg-slate-100 text-slate-700")
+  createdAt    DateTime     @default(now()) @map("created_at")
+  updatedAt    DateTime     @updatedAt @map("updated_at")
+  quickReplies QuickReply[]
+
+  @@map("quick_reply_categories")
+}
+
 model QuickReply {
   id        String   @id
   title     String
@@ -349,9 +362,11 @@ model QuickReply {
   text      String   @default("")
   imageUrl  String?  @map("image_url")
   category  String   @default("general")
+  categoryData QuickReplyCategory @relation(fields: [category], references: [id], onDelete: Restrict, onUpdate: Cascade)
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
+  @@index([category])
   @@map("quick_replies")
 }
 

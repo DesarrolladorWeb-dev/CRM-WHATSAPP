@@ -12,6 +12,11 @@ import { quickReplyCreateSchema, primerErrorDeZod } from '@/lib/schemas';
 import { logger, motivo } from '@/lib/logger';
 import { requireUserPermission } from '@/lib/auth';
 
+function prismaErrorCode(error: unknown): string | undefined {
+  if (typeof error !== 'object' || error === null || !('code' in error)) return undefined;
+  return typeof error.code === 'string' ? error.code : undefined;
+}
+
 export async function GET(req: NextRequest) {
   const denied = await requireUserPermission(req, 'read');
   if (denied) return denied;
@@ -69,6 +74,12 @@ export async function POST(req: NextRequest) {
     const saved = await upsertQuickReply(db, id, parsed.data);
     return NextResponse.json({ success: true, source: 'postgres', data: saved });
   } catch (error) {
+    if (prismaErrorCode(error) === 'P2003') {
+      return NextResponse.json(
+        { success: false, error: 'La categoría seleccionada ya no existe. Actualiza la lista y vuelve a intentar.' },
+        { status: 400 }
+      );
+    }
     const errorId = captureException(error, { route: '/api/quick-replies', method: 'POST' });
     logger.error('Error in POST /api/quick-replies', { motivo: motivo(error) });
     return NextResponse.json({ success: false, error: 'Error interno del servidor', errorId }, { status: 500 });

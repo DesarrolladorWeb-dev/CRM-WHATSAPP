@@ -30,13 +30,21 @@ export interface Tag {
   color: string;
 }
 
+export interface QuickReplyCategory {
+  id: string;
+  label: string;
+  icon: string;
+  color: string;
+  usageCount?: number;
+}
+
 export interface QuickReply {
   id: string;
   title: string;
   emoji?: string;
   text: string;
   imageUrl?: string;
-  category?: 'saludo' | 'ventas' | 'precios' | 'soporte' | 'general';
+  category?: string;
 }
 
 export interface Contact {

@@ -266,7 +266,7 @@ async function seedPostgres() {
           emoji: q.emoji || '',
           text: q.text || '',
           imageUrl: q.imageUrl ?? null,
-          category: q.category || 'general',
+          categoryData: { connect: { id: q.category || 'general' } },
         },
       });
     }
