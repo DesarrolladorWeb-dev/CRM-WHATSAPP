@@ -981,6 +981,9 @@ export default function HomePage() {
     socket.on('connect', () => {
       setIsWhatsappSocketConnected(true);
       socket.emit('subscribe-messages');
+      getWhatsappStatus().then(st => {
+        if (st.ok && st.data) setWhatsappStatus(st.data);
+      });
       // El servicio solo reenvia a su webhook si la URL esta configurada, y la
       // pierde al reiniciarse: registrarla en cada conexion garantiza que los
       // mensajes (y su multimedia) persistan en el backend aunque este
@@ -998,9 +1001,6 @@ export default function HomePage() {
     });
     socket.on('disconnect', () => {
       setIsWhatsappSocketConnected(false);
-      setWhatsappStatus(prev =>
-        prev ? { ...prev, isConnected: false, connectionStatus: 'disconnected' } : prev
-      );
     });
 
     // Estado inicial + historial reciente cuando el CRM arranca.
