@@ -211,10 +211,15 @@ type Req<T> = { ok: boolean; data: ServiceBody<T> | null; error?: string; status
 /** Hace una peticion al servicio y nunca lanza: devuelve un resultado explicito. */
 async function request<T>(path: string, init?: RequestInit): Promise<Req<T>> {
   try {
-    const res = await fetch(`${SERVICE_URL}${path}`, {
+    const isServer = typeof window === 'undefined';
+    const target = isServer ? `${SERVICE_URL}${path}` : path.replace('/api/whatsapp/', '/api/wa-bridge/');
+    const secretHeader = isServer && process.env.WHATSAPP_SERVICE_SECRET
+      ? { 'x-service-secret': process.env.WHATSAPP_SERVICE_SECRET }
+      : {};
+    const res = await fetch(target, {
       ...init,
       cache: 'no-store',
-      headers: { 'Content-Type': 'application/json', ...(init?.headers || {}) },
+      headers: { 'Content-Type': 'application/json', ...secretHeader, ...(init?.headers || {}) },
     });
 
     const body = await res.json().catch(() => null);

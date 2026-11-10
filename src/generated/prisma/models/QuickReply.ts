@@ -206,6 +206,7 @@ export type QuickReplyWhereInput = {
   category?: Prisma.StringFilter<"QuickReply"> | string
   createdAt?: Prisma.DateTimeFilter<"QuickReply"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"QuickReply"> | Date | string
+  categoryData?: Prisma.XOR<Prisma.QuickReplyCategoryScalarRelationFilter, Prisma.QuickReplyCategoryWhereInput>
 }
 
 export type QuickReplyOrderByWithRelationInput = {
@@ -217,6 +218,7 @@ export type QuickReplyOrderByWithRelationInput = {
   category?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
+  categoryData?: Prisma.QuickReplyCategoryOrderByWithRelationInput
 }
 
 export type QuickReplyWhereUniqueInput = Prisma.AtLeast<{
@@ -231,6 +233,7 @@ export type QuickReplyWhereUniqueInput = Prisma.AtLeast<{
   category?: Prisma.StringFilter<"QuickReply"> | string
   createdAt?: Prisma.DateTimeFilter<"QuickReply"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"QuickReply"> | Date | string
+  categoryData?: Prisma.XOR<Prisma.QuickReplyCategoryScalarRelationFilter, Prisma.QuickReplyCategoryWhereInput>
 }, "id">
 
 export type QuickReplyOrderByWithAggregationInput = {
@@ -267,9 +270,9 @@ export type QuickReplyCreateInput = {
   emoji?: string
   text?: string
   imageUrl?: string | null
-  category?: string
   createdAt?: Date | string
   updatedAt?: Date | string
+  categoryData?: Prisma.QuickReplyCategoryCreateNestedOneWithoutQuickRepliesInput
 }
 
 export type QuickReplyUncheckedCreateInput = {
@@ -289,9 +292,9 @@ export type QuickReplyUpdateInput = {
   emoji?: Prisma.StringFieldUpdateOperationsInput | string
   text?: Prisma.StringFieldUpdateOperationsInput | string
   imageUrl?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
-  category?: Prisma.StringFieldUpdateOperationsInput | string
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  categoryData?: Prisma.QuickReplyCategoryUpdateOneRequiredWithoutQuickRepliesNestedInput
 }
 
 export type QuickReplyUncheckedUpdateInput = {
@@ -322,7 +325,6 @@ export type QuickReplyUpdateManyMutationInput = {
   emoji?: Prisma.StringFieldUpdateOperationsInput | string
   text?: Prisma.StringFieldUpdateOperationsInput | string
   imageUrl?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
-  category?: Prisma.StringFieldUpdateOperationsInput | string
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -336,6 +338,16 @@ export type QuickReplyUncheckedUpdateManyInput = {
   category?: Prisma.StringFieldUpdateOperationsInput | string
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+}
+
+export type QuickReplyListRelationFilter = {
+  every?: Prisma.QuickReplyWhereInput
+  some?: Prisma.QuickReplyWhereInput
+  none?: Prisma.QuickReplyWhereInput
+}
+
+export type QuickReplyOrderByRelationAggregateInput = {
+  _count?: Prisma.SortOrder
 }
 
 export type QuickReplyCountOrderByAggregateInput = {
@@ -371,6 +383,148 @@ export type QuickReplyMinOrderByAggregateInput = {
   updatedAt?: Prisma.SortOrder
 }
 
+export type QuickReplyCreateNestedManyWithoutCategoryDataInput = {
+  create?: Prisma.XOR<Prisma.QuickReplyCreateWithoutCategoryDataInput, Prisma.QuickReplyUncheckedCreateWithoutCategoryDataInput> | Prisma.QuickReplyCreateWithoutCategoryDataInput[] | Prisma.QuickReplyUncheckedCreateWithoutCategoryDataInput[]
+  connectOrCreate?: Prisma.QuickReplyCreateOrConnectWithoutCategoryDataInput | Prisma.QuickReplyCreateOrConnectWithoutCategoryDataInput[]
+  createMany?: Prisma.QuickReplyCreateManyCategoryDataInputEnvelope
+  connect?: Prisma.QuickReplyWhereUniqueInput | Prisma.QuickReplyWhereUniqueInput[]
+}
+
+export type QuickReplyUncheckedCreateNestedManyWithoutCategoryDataInput = {
+  create?: Prisma.XOR<Prisma.QuickReplyCreateWithoutCategoryDataInput, Prisma.QuickReplyUncheckedCreateWithoutCategoryDataInput> | Prisma.QuickReplyCreateWithoutCategoryDataInput[] | Prisma.QuickReplyUncheckedCreateWithoutCategoryDataInput[]
+  connectOrCreate?: Prisma.QuickReplyCreateOrConnectWithoutCategoryDataInput | Prisma.QuickReplyCreateOrConnectWithoutCategoryDataInput[]
+  createMany?: Prisma.QuickReplyCreateManyCategoryDataInputEnvelope
+  connect?: Prisma.QuickReplyWhereUniqueInput | Prisma.QuickReplyWhereUniqueInput[]
+}
+
+export type QuickReplyUpdateManyWithoutCategoryDataNestedInput = {
+  create?: Prisma.XOR<Prisma.QuickReplyCreateWithoutCategoryDataInput, Prisma.QuickReplyUncheckedCreateWithoutCategoryDataInput> | Prisma.QuickReplyCreateWithoutCategoryDataInput[] | Prisma.QuickReplyUncheckedCreateWithoutCategoryDataInput[]
+  connectOrCreate?: Prisma.QuickReplyCreateOrConnectWithoutCategoryDataInput | Prisma.QuickReplyCreateOrConnectWithoutCategoryDataInput[]
+  upsert?: Prisma.QuickReplyUpsertWithWhereUniqueWithoutCategoryDataInput | Prisma.QuickReplyUpsertWithWhereUniqueWithoutCategoryDataInput[]
+  createMany?: Prisma.QuickReplyCreateManyCategoryDataInputEnvelope
+  set?: Prisma.QuickReplyWhereUniqueInput | Prisma.QuickReplyWhereUniqueInput[]
+  disconnect?: Prisma.QuickReplyWhereUniqueInput | Prisma.QuickReplyWhereUniqueInput[]
+  delete?: Prisma.QuickReplyWhereUniqueInput | Prisma.QuickReplyWhereUniqueInput[]
+  connect?: Prisma.QuickReplyWhereUniqueInput | Prisma.QuickReplyWhereUniqueInput[]
+  update?: Prisma.QuickReplyUpdateWithWhereUniqueWithoutCategoryDataInput | Prisma.QuickReplyUpdateWithWhereUniqueWithoutCategoryDataInput[]
+  updateMany?: Prisma.QuickReplyUpdateManyWithWhereWithoutCategoryDataInput | Prisma.QuickReplyUpdateManyWithWhereWithoutCategoryDataInput[]
+  deleteMany?: Prisma.QuickReplyScalarWhereInput | Prisma.QuickReplyScalarWhereInput[]
+}
+
+export type QuickReplyUncheckedUpdateManyWithoutCategoryDataNestedInput = {
+  create?: Prisma.XOR<Prisma.QuickReplyCreateWithoutCategoryDataInput, Prisma.QuickReplyUncheckedCreateWithoutCategoryDataInput> | Prisma.QuickReplyCreateWithoutCategoryDataInput[] | Prisma.QuickReplyUncheckedCreateWithoutCategoryDataInput[]
+  connectOrCreate?: Prisma.QuickReplyCreateOrConnectWithoutCategoryDataInput | Prisma.QuickReplyCreateOrConnectWithoutCategoryDataInput[]
+  upsert?: Prisma.QuickReplyUpsertWithWhereUniqueWithoutCategoryDataInput | Prisma.QuickReplyUpsertWithWhereUniqueWithoutCategoryDataInput[]
+  createMany?: Prisma.QuickReplyCreateManyCategoryDataInputEnvelope
+  set?: Prisma.QuickReplyWhereUniqueInput | Prisma.QuickReplyWhereUniqueInput[]
+  disconnect?: Prisma.QuickReplyWhereUniqueInput | Prisma.QuickReplyWhereUniqueInput[]
+  delete?: Prisma.QuickReplyWhereUniqueInput | Prisma.QuickReplyWhereUniqueInput[]
+  connect?: Prisma.QuickReplyWhereUniqueInput | Prisma.QuickReplyWhereUniqueInput[]
+  update?: Prisma.QuickReplyUpdateWithWhereUniqueWithoutCategoryDataInput | Prisma.QuickReplyUpdateWithWhereUniqueWithoutCategoryDataInput[]
+  updateMany?: Prisma.QuickReplyUpdateManyWithWhereWithoutCategoryDataInput | Prisma.QuickReplyUpdateManyWithWhereWithoutCategoryDataInput[]
+  deleteMany?: Prisma.QuickReplyScalarWhereInput | Prisma.QuickReplyScalarWhereInput[]
+}
+
+export type QuickReplyCreateWithoutCategoryDataInput = {
+  id: string
+  title: string
+  emoji?: string
+  text?: string
+  imageUrl?: string | null
+  createdAt?: Date | string
+  updatedAt?: Date | string
+}
+
+export type QuickReplyUncheckedCreateWithoutCategoryDataInput = {
+  id: string
+  title: string
+  emoji?: string
+  text?: string
+  imageUrl?: string | null
+  createdAt?: Date | string
+  updatedAt?: Date | string
+}
+
+export type QuickReplyCreateOrConnectWithoutCategoryDataInput = {
+  where: Prisma.QuickReplyWhereUniqueInput
+  create: Prisma.XOR<Prisma.QuickReplyCreateWithoutCategoryDataInput, Prisma.QuickReplyUncheckedCreateWithoutCategoryDataInput>
+}
+
+export type QuickReplyCreateManyCategoryDataInputEnvelope = {
+  data: Prisma.QuickReplyCreateManyCategoryDataInput | Prisma.QuickReplyCreateManyCategoryDataInput[]
+  skipDuplicates?: boolean
+}
+
+export type QuickReplyUpsertWithWhereUniqueWithoutCategoryDataInput = {
+  where: Prisma.QuickReplyWhereUniqueInput
+  update: Prisma.XOR<Prisma.QuickReplyUpdateWithoutCategoryDataInput, Prisma.QuickReplyUncheckedUpdateWithoutCategoryDataInput>
+  create: Prisma.XOR<Prisma.QuickReplyCreateWithoutCategoryDataInput, Prisma.QuickReplyUncheckedCreateWithoutCategoryDataInput>
+}
+
+export type QuickReplyUpdateWithWhereUniqueWithoutCategoryDataInput = {
+  where: Prisma.QuickReplyWhereUniqueInput
+  data: Prisma.XOR<Prisma.QuickReplyUpdateWithoutCategoryDataInput, Prisma.QuickReplyUncheckedUpdateWithoutCategoryDataInput>
+}
+
+export type QuickReplyUpdateManyWithWhereWithoutCategoryDataInput = {
+  where: Prisma.QuickReplyScalarWhereInput
+  data: Prisma.XOR<Prisma.QuickReplyUpdateManyMutationInput, Prisma.QuickReplyUncheckedUpdateManyWithoutCategoryDataInput>
+}
+
+export type QuickReplyScalarWhereInput = {
+  AND?: Prisma.QuickReplyScalarWhereInput | Prisma.QuickReplyScalarWhereInput[]
+  OR?: Prisma.QuickReplyScalarWhereInput[]
+  NOT?: Prisma.QuickReplyScalarWhereInput | Prisma.QuickReplyScalarWhereInput[]
+  id?: Prisma.StringFilter<"QuickReply"> | string
+  title?: Prisma.StringFilter<"QuickReply"> | string
+  emoji?: Prisma.StringFilter<"QuickReply"> | string
+  text?: Prisma.StringFilter<"QuickReply"> | string
+  imageUrl?: Prisma.StringNullableFilter<"QuickReply"> | string | null
+  category?: Prisma.StringFilter<"QuickReply"> | string
+  createdAt?: Prisma.DateTimeFilter<"QuickReply"> | Date | string
+  updatedAt?: Prisma.DateTimeFilter<"QuickReply"> | Date | string
+}
+
+export type QuickReplyCreateManyCategoryDataInput = {
+  id: string
+  title: string
+  emoji?: string
+  text?: string
+  imageUrl?: string | null
+  createdAt?: Date | string
+  updatedAt?: Date | string
+}
+
+export type QuickReplyUpdateWithoutCategoryDataInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  title?: Prisma.StringFieldUpdateOperationsInput | string
+  emoji?: Prisma.StringFieldUpdateOperationsInput | string
+  text?: Prisma.StringFieldUpdateOperationsInput | string
+  imageUrl?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+}
+
+export type QuickReplyUncheckedUpdateWithoutCategoryDataInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  title?: Prisma.StringFieldUpdateOperationsInput | string
+  emoji?: Prisma.StringFieldUpdateOperationsInput | string
+  text?: Prisma.StringFieldUpdateOperationsInput | string
+  imageUrl?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+}
+
+export type QuickReplyUncheckedUpdateManyWithoutCategoryDataInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  title?: Prisma.StringFieldUpdateOperationsInput | string
+  emoji?: Prisma.StringFieldUpdateOperationsInput | string
+  text?: Prisma.StringFieldUpdateOperationsInput | string
+  imageUrl?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+}
+
 
 
 export type QuickReplySelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
@@ -382,6 +536,7 @@ export type QuickReplySelect<ExtArgs extends runtime.Types.Extensions.InternalAr
   category?: boolean
   createdAt?: boolean
   updatedAt?: boolean
+  categoryData?: boolean | Prisma.QuickReplyCategoryDefaultArgs<ExtArgs>
 }, ExtArgs["result"]["quickReply"]>
 
 export type QuickReplySelectCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
@@ -393,6 +548,7 @@ export type QuickReplySelectCreateManyAndReturn<ExtArgs extends runtime.Types.Ex
   category?: boolean
   createdAt?: boolean
   updatedAt?: boolean
+  categoryData?: boolean | Prisma.QuickReplyCategoryDefaultArgs<ExtArgs>
 }, ExtArgs["result"]["quickReply"]>
 
 export type QuickReplySelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
@@ -404,6 +560,7 @@ export type QuickReplySelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Ex
   category?: boolean
   createdAt?: boolean
   updatedAt?: boolean
+  categoryData?: boolean | Prisma.QuickReplyCategoryDefaultArgs<ExtArgs>
 }, ExtArgs["result"]["quickReply"]>
 
 export type QuickReplySelectScalar = {
@@ -418,10 +575,21 @@ export type QuickReplySelectScalar = {
 }
 
 export type QuickReplyOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "title" | "emoji" | "text" | "imageUrl" | "category" | "createdAt" | "updatedAt", ExtArgs["result"]["quickReply"]>
+export type QuickReplyInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  categoryData?: boolean | Prisma.QuickReplyCategoryDefaultArgs<ExtArgs>
+}
+export type QuickReplyIncludeCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  categoryData?: boolean | Prisma.QuickReplyCategoryDefaultArgs<ExtArgs>
+}
+export type QuickReplyIncludeUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  categoryData?: boolean | Prisma.QuickReplyCategoryDefaultArgs<ExtArgs>
+}
 
 export type $QuickReplyPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   name: "QuickReply"
-  objects: {}
+  objects: {
+    categoryData: Prisma.$QuickReplyCategoryPayload<ExtArgs>
+  }
   scalars: runtime.Types.Extensions.GetPayloadResult<{
     id: string
     title: string
@@ -825,6 +993,7 @@ readonly fields: QuickReplyFieldRefs;
  */
 export interface Prisma__QuickReplyClient<T, Null = never, ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
   readonly [Symbol.toStringTag]: "PrismaPromise"
+  categoryData<T extends Prisma.QuickReplyCategoryDefaultArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.QuickReplyCategoryDefaultArgs<ExtArgs>>): Prisma.Prisma__QuickReplyCategoryClient<runtime.Types.Result.GetResult<Prisma.$QuickReplyCategoryPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
   /**
    * Attaches callbacks for the resolution and/or rejection of the Promise.
    * @param onfulfilled The callback to execute when the Promise is resolved.
@@ -879,6 +1048,10 @@ export type QuickReplyFindUniqueArgs<ExtArgs extends runtime.Types.Extensions.In
    */
   omit?: Prisma.QuickReplyOmit<ExtArgs> | null
   /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.QuickReplyInclude<ExtArgs> | null
+  /**
    * Filter, which QuickReply to fetch.
    */
   where: Prisma.QuickReplyWhereUniqueInput
@@ -897,6 +1070,10 @@ export type QuickReplyFindUniqueOrThrowArgs<ExtArgs extends runtime.Types.Extens
    */
   omit?: Prisma.QuickReplyOmit<ExtArgs> | null
   /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.QuickReplyInclude<ExtArgs> | null
+  /**
    * Filter, which QuickReply to fetch.
    */
   where: Prisma.QuickReplyWhereUniqueInput
@@ -914,6 +1091,10 @@ export type QuickReplyFindFirstArgs<ExtArgs extends runtime.Types.Extensions.Int
    * Omit specific fields from the QuickReply
    */
   omit?: Prisma.QuickReplyOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.QuickReplyInclude<ExtArgs> | null
   /**
    * Filter, which QuickReply to fetch.
    */
@@ -963,6 +1144,10 @@ export type QuickReplyFindFirstOrThrowArgs<ExtArgs extends runtime.Types.Extensi
    */
   omit?: Prisma.QuickReplyOmit<ExtArgs> | null
   /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.QuickReplyInclude<ExtArgs> | null
+  /**
    * Filter, which QuickReply to fetch.
    */
   where?: Prisma.QuickReplyWhereInput
@@ -1010,6 +1195,10 @@ export type QuickReplyFindManyArgs<ExtArgs extends runtime.Types.Extensions.Inte
    * Omit specific fields from the QuickReply
    */
   omit?: Prisma.QuickReplyOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.QuickReplyInclude<ExtArgs> | null
   /**
    * Filter, which QuickReplies to fetch.
    */
@@ -1059,6 +1248,10 @@ export type QuickReplyCreateArgs<ExtArgs extends runtime.Types.Extensions.Intern
    */
   omit?: Prisma.QuickReplyOmit<ExtArgs> | null
   /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.QuickReplyInclude<ExtArgs> | null
+  /**
    * The data needed to create a QuickReply.
    */
   data: Prisma.XOR<Prisma.QuickReplyCreateInput, Prisma.QuickReplyUncheckedCreateInput>
@@ -1092,6 +1285,10 @@ export type QuickReplyCreateManyAndReturnArgs<ExtArgs extends runtime.Types.Exte
    */
   data: Prisma.QuickReplyCreateManyInput | Prisma.QuickReplyCreateManyInput[]
   skipDuplicates?: boolean
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.QuickReplyIncludeCreateManyAndReturn<ExtArgs> | null
 }
 
 /**
@@ -1106,6 +1303,10 @@ export type QuickReplyUpdateArgs<ExtArgs extends runtime.Types.Extensions.Intern
    * Omit specific fields from the QuickReply
    */
   omit?: Prisma.QuickReplyOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.QuickReplyInclude<ExtArgs> | null
   /**
    * The data needed to update a QuickReply.
    */
@@ -1158,6 +1359,10 @@ export type QuickReplyUpdateManyAndReturnArgs<ExtArgs extends runtime.Types.Exte
    * Limit how many QuickReplies to update.
    */
   limit?: number
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.QuickReplyIncludeUpdateManyAndReturn<ExtArgs> | null
 }
 
 /**
@@ -1172,6 +1377,10 @@ export type QuickReplyUpsertArgs<ExtArgs extends runtime.Types.Extensions.Intern
    * Omit specific fields from the QuickReply
    */
   omit?: Prisma.QuickReplyOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.QuickReplyInclude<ExtArgs> | null
   /**
    * The filter to search for the QuickReply to update in case it exists.
    */
@@ -1198,6 +1407,10 @@ export type QuickReplyDeleteArgs<ExtArgs extends runtime.Types.Extensions.Intern
    * Omit specific fields from the QuickReply
    */
   omit?: Prisma.QuickReplyOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.QuickReplyInclude<ExtArgs> | null
   /**
    * Filter which QuickReply to delete.
    */
@@ -1230,4 +1443,8 @@ export type QuickReplyDefaultArgs<ExtArgs extends runtime.Types.Extensions.Inter
    * Omit specific fields from the QuickReply
    */
   omit?: Prisma.QuickReplyOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.QuickReplyInclude<ExtArgs> | null
 }

@@ -968,7 +968,13 @@ export default function HomePage() {
     const socket = createSocket(WHATSAPP_SERVICE_URL, {
       transports: ['websocket', 'polling'],
       reconnectionAttempts: 5,
-      timeout: 5000
+      timeout: 5000,
+      auth: (callback) => {
+        fetch('/api/wa-socket-token', { cache: 'no-store' })
+          .then(res => res.ok ? res.json() : Promise.reject(new Error('No se pudo autorizar WhatsApp')))
+          .then(data => callback({ token: data.token }))
+          .catch(() => callback({ token: '' }));
+      }
     });
     whatsappSocketRef.current = socket;
 

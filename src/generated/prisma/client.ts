@@ -122,6 +122,11 @@ export type AutomationRule = Prisma.AutomationRuleModel
  */
 export type AutomationAction = Prisma.AutomationActionModel
 /**
+ * Model QuickReplyCategory
+ * 
+ */
+export type QuickReplyCategory = Prisma.QuickReplyCategoryModel
+/**
  * Model QuickReply
  * 
  */

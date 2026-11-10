@@ -408,7 +408,7 @@ export const userUpdateSchema = z
 
 // ----- Quick Reply -----
 
-const quickReplyCategory = z.enum(['saludo', 'ventas', 'precios', 'soporte', 'general']);
+const quickReplyCategory = z.string().trim().min(1).max(64);
 
 const quickReplyFields = {
   id: z.string().min(1).max(64).optional(),
@@ -426,6 +426,23 @@ export const quickReplyUpdateSchema = z
   .partial()
   .extend({ id: z.string().min(1) })
   .strict();
+
+const quickReplyCategoryFields = {
+  label: z.string().trim().min(1, 'El nombre de la categoría es obligatorio').max(50),
+  icon: z.string().trim().min(1).max(40).optional(),
+  color: z.string().trim().min(1).max(100).optional(),
+};
+
+export const quickReplyCategoryCreateSchema = z.object(quickReplyCategoryFields).strict();
+
+export const quickReplyCategoryUpdateSchema = z
+  .object(quickReplyCategoryFields)
+  .partial()
+  .extend({ id: z.string().min(1).max(64) })
+  .strict()
+  .refine((data) => data.label !== undefined || data.icon !== undefined || data.color !== undefined, {
+    message: 'Debes indicar al menos un campo para actualizar',
+  });
 
 // ----- Preset Image -----
 // Galeria compartida (Campanas + Respuestas Rapidas). `url` acepta tanto un
