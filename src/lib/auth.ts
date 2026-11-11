@@ -153,49 +153,50 @@ function extractToken(req: NextRequest) {
 
 
 export async function requireUserPermission(req: NextRequest, required: Permission): Promise<NextResponse | null> {
+  let userId = req.headers.get('x-verified-user-id');
 
-  const userId = req.headers.get('x-verified-user-id')
+  // Fallback: si el middleware no inyectó el header, validamos la cookie JWT directamente
   if (!userId) {
-    return NextResponse.json({ success: false, error: 'No autenticado' }, { status: 401 })
+    const auth = await requireAuth(req);
+    if ('error' in auth) return auth.error;
+    userId = auth.payload.userId;
   }
 
-  try{
+  try {
     const db = await connectToPostgres();
-    if(!db){
+    if (!db) {
       return dbUnavailableResponse();
     }
 
-    const user = await db.user.findUnique({ where: { id: userId } })
-    
+    const user = await db.user.findUnique({ where: { id: userId } });
+
     if (!user || !hasPermission(user.role, required)) {
-    return NextResponse.json(
-      { success: false, error: 'Permisos insuficientes para esta operación' },
-      {
-        status: 403
-      }
-    )
-  }
+      return NextResponse.json(
+        { success: false, error: 'Permisos insuficientes para esta operación' },
+        { status: 403 }
+      );
+    }
 
-  return null;}
-  catch(error){
+    return null;
+  } catch (error) {
     const errorId = captureException(error, {
-    route: 'requireUserPermission',
-  });
+      route: 'requireUserPermission',
+    });
 
-  return NextResponse.json(
-    {
-      success: false,
-      error: 'No se pudieron verificar los permisos. Inténtalo de nuevo.',
-      errorId,
-    },
-    { status: 503 }
-  );
+    return NextResponse.json(
+      {
+        success: false,
+        error: 'No se pudieron verificar los permisos. Inténtalo de nuevo.',
+        errorId,
+      },
+      { status: 503 }
+    );
   }
-
-
-
-
 }
+
+
+
+
 
 export async function requireAuth(req: NextRequest) {
   const token = extractToken(req)
