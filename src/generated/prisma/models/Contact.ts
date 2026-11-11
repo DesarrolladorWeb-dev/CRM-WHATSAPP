@@ -44,6 +44,7 @@ export type ContactMinAggregateOutputType = {
   phone: string | null
   email: string | null
   channel: string | null
+  origin: string | null
   sentiment: string | null
   leadScore: number | null
   stage: string | null
@@ -65,6 +66,7 @@ export type ContactMaxAggregateOutputType = {
   phone: string | null
   email: string | null
   channel: string | null
+  origin: string | null
   sentiment: string | null
   leadScore: number | null
   stage: string | null
@@ -86,6 +88,7 @@ export type ContactCountAggregateOutputType = {
   phone: number
   email: number
   channel: number
+  origin: number
   sentiment: number
   leadScore: number
   stage: number
@@ -120,6 +123,7 @@ export type ContactMinAggregateInputType = {
   phone?: true
   email?: true
   channel?: true
+  origin?: true
   sentiment?: true
   leadScore?: true
   stage?: true
@@ -141,6 +145,7 @@ export type ContactMaxAggregateInputType = {
   phone?: true
   email?: true
   channel?: true
+  origin?: true
   sentiment?: true
   leadScore?: true
   stage?: true
@@ -162,6 +167,7 @@ export type ContactCountAggregateInputType = {
   phone?: true
   email?: true
   channel?: true
+  origin?: true
   sentiment?: true
   leadScore?: true
   stage?: true
@@ -271,6 +277,7 @@ export type ContactGroupByOutputType = {
   phone: string | null
   email: string | null
   channel: string
+  origin: string | null
   sentiment: string
   leadScore: number
   stage: string
@@ -316,6 +323,7 @@ export type ContactWhereInput = {
   phone?: Prisma.StringNullableFilter<"Contact"> | string | null
   email?: Prisma.StringNullableFilter<"Contact"> | string | null
   channel?: Prisma.StringFilter<"Contact"> | string
+  origin?: Prisma.StringNullableFilter<"Contact"> | string | null
   sentiment?: Prisma.StringFilter<"Contact"> | string
   leadScore?: Prisma.IntFilter<"Contact"> | number
   stage?: Prisma.StringFilter<"Contact"> | string
@@ -342,6 +350,7 @@ export type ContactOrderByWithRelationInput = {
   phone?: Prisma.SortOrderInput | Prisma.SortOrder
   email?: Prisma.SortOrderInput | Prisma.SortOrder
   channel?: Prisma.SortOrder
+  origin?: Prisma.SortOrderInput | Prisma.SortOrder
   sentiment?: Prisma.SortOrder
   leadScore?: Prisma.SortOrder
   stage?: Prisma.SortOrder
@@ -371,6 +380,7 @@ export type ContactWhereUniqueInput = Prisma.AtLeast<{
   phone?: Prisma.StringNullableFilter<"Contact"> | string | null
   email?: Prisma.StringNullableFilter<"Contact"> | string | null
   channel?: Prisma.StringFilter<"Contact"> | string
+  origin?: Prisma.StringNullableFilter<"Contact"> | string | null
   sentiment?: Prisma.StringFilter<"Contact"> | string
   leadScore?: Prisma.IntFilter<"Contact"> | number
   stage?: Prisma.StringFilter<"Contact"> | string
@@ -397,6 +407,7 @@ export type ContactOrderByWithAggregationInput = {
   phone?: Prisma.SortOrderInput | Prisma.SortOrder
   email?: Prisma.SortOrderInput | Prisma.SortOrder
   channel?: Prisma.SortOrder
+  origin?: Prisma.SortOrderInput | Prisma.SortOrder
   sentiment?: Prisma.SortOrder
   leadScore?: Prisma.SortOrder
   stage?: Prisma.SortOrder
@@ -427,6 +438,7 @@ export type ContactScalarWhereWithAggregatesInput = {
   phone?: Prisma.StringNullableWithAggregatesFilter<"Contact"> | string | null
   email?: Prisma.StringNullableWithAggregatesFilter<"Contact"> | string | null
   channel?: Prisma.StringWithAggregatesFilter<"Contact"> | string
+  origin?: Prisma.StringNullableWithAggregatesFilter<"Contact"> | string | null
   sentiment?: Prisma.StringWithAggregatesFilter<"Contact"> | string
   leadScore?: Prisma.IntWithAggregatesFilter<"Contact"> | number
   stage?: Prisma.StringWithAggregatesFilter<"Contact"> | string
@@ -449,6 +461,7 @@ export type ContactCreateInput = {
   phone?: string | null
   email?: string | null
   channel?: string
+  origin?: string | null
   sentiment?: string
   leadScore?: number
   stage?: string
@@ -475,6 +488,7 @@ export type ContactUncheckedCreateInput = {
   phone?: string | null
   email?: string | null
   channel?: string
+  origin?: string | null
   sentiment?: string
   leadScore?: number
   stage?: string
@@ -501,6 +515,7 @@ export type ContactUpdateInput = {
   phone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   email?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   channel?: Prisma.StringFieldUpdateOperationsInput | string
+  origin?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   sentiment?: Prisma.StringFieldUpdateOperationsInput | string
   leadScore?: Prisma.IntFieldUpdateOperationsInput | number
   stage?: Prisma.StringFieldUpdateOperationsInput | string
@@ -527,6 +542,7 @@ export type ContactUncheckedUpdateInput = {
   phone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   email?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   channel?: Prisma.StringFieldUpdateOperationsInput | string
+  origin?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   sentiment?: Prisma.StringFieldUpdateOperationsInput | string
   leadScore?: Prisma.IntFieldUpdateOperationsInput | number
   stage?: Prisma.StringFieldUpdateOperationsInput | string
@@ -553,6 +569,7 @@ export type ContactCreateManyInput = {
   phone?: string | null
   email?: string | null
   channel?: string
+  origin?: string | null
   sentiment?: string
   leadScore?: number
   stage?: string
@@ -575,6 +592,7 @@ export type ContactUpdateManyMutationInput = {
   phone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   email?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   channel?: Prisma.StringFieldUpdateOperationsInput | string
+  origin?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   sentiment?: Prisma.StringFieldUpdateOperationsInput | string
   leadScore?: Prisma.IntFieldUpdateOperationsInput | number
   stage?: Prisma.StringFieldUpdateOperationsInput | string
@@ -597,6 +615,7 @@ export type ContactUncheckedUpdateManyInput = {
   phone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   email?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   channel?: Prisma.StringFieldUpdateOperationsInput | string
+  origin?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   sentiment?: Prisma.StringFieldUpdateOperationsInput | string
   leadScore?: Prisma.IntFieldUpdateOperationsInput | number
   stage?: Prisma.StringFieldUpdateOperationsInput | string
@@ -619,6 +638,7 @@ export type ContactCountOrderByAggregateInput = {
   phone?: Prisma.SortOrder
   email?: Prisma.SortOrder
   channel?: Prisma.SortOrder
+  origin?: Prisma.SortOrder
   sentiment?: Prisma.SortOrder
   leadScore?: Prisma.SortOrder
   stage?: Prisma.SortOrder
@@ -646,6 +666,7 @@ export type ContactMaxOrderByAggregateInput = {
   phone?: Prisma.SortOrder
   email?: Prisma.SortOrder
   channel?: Prisma.SortOrder
+  origin?: Prisma.SortOrder
   sentiment?: Prisma.SortOrder
   leadScore?: Prisma.SortOrder
   stage?: Prisma.SortOrder
@@ -667,6 +688,7 @@ export type ContactMinOrderByAggregateInput = {
   phone?: Prisma.SortOrder
   email?: Prisma.SortOrder
   channel?: Prisma.SortOrder
+  origin?: Prisma.SortOrder
   sentiment?: Prisma.SortOrder
   leadScore?: Prisma.SortOrder
   stage?: Prisma.SortOrder
@@ -774,6 +796,7 @@ export type ContactCreateWithoutContactTagsInput = {
   phone?: string | null
   email?: string | null
   channel?: string
+  origin?: string | null
   sentiment?: string
   leadScore?: number
   stage?: string
@@ -799,6 +822,7 @@ export type ContactUncheckedCreateWithoutContactTagsInput = {
   phone?: string | null
   email?: string | null
   channel?: string
+  origin?: string | null
   sentiment?: string
   leadScore?: number
   stage?: string
@@ -840,6 +864,7 @@ export type ContactUpdateWithoutContactTagsInput = {
   phone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   email?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   channel?: Prisma.StringFieldUpdateOperationsInput | string
+  origin?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   sentiment?: Prisma.StringFieldUpdateOperationsInput | string
   leadScore?: Prisma.IntFieldUpdateOperationsInput | number
   stage?: Prisma.StringFieldUpdateOperationsInput | string
@@ -865,6 +890,7 @@ export type ContactUncheckedUpdateWithoutContactTagsInput = {
   phone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   email?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   channel?: Prisma.StringFieldUpdateOperationsInput | string
+  origin?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   sentiment?: Prisma.StringFieldUpdateOperationsInput | string
   leadScore?: Prisma.IntFieldUpdateOperationsInput | number
   stage?: Prisma.StringFieldUpdateOperationsInput | string
@@ -890,6 +916,7 @@ export type ContactCreateWithoutInteractionsInput = {
   phone?: string | null
   email?: string | null
   channel?: string
+  origin?: string | null
   sentiment?: string
   leadScore?: number
   stage?: string
@@ -915,6 +942,7 @@ export type ContactUncheckedCreateWithoutInteractionsInput = {
   phone?: string | null
   email?: string | null
   channel?: string
+  origin?: string | null
   sentiment?: string
   leadScore?: number
   stage?: string
@@ -956,6 +984,7 @@ export type ContactUpdateWithoutInteractionsInput = {
   phone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   email?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   channel?: Prisma.StringFieldUpdateOperationsInput | string
+  origin?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   sentiment?: Prisma.StringFieldUpdateOperationsInput | string
   leadScore?: Prisma.IntFieldUpdateOperationsInput | number
   stage?: Prisma.StringFieldUpdateOperationsInput | string
@@ -981,6 +1010,7 @@ export type ContactUncheckedUpdateWithoutInteractionsInput = {
   phone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   email?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   channel?: Prisma.StringFieldUpdateOperationsInput | string
+  origin?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   sentiment?: Prisma.StringFieldUpdateOperationsInput | string
   leadScore?: Prisma.IntFieldUpdateOperationsInput | number
   stage?: Prisma.StringFieldUpdateOperationsInput | string
@@ -1006,6 +1036,7 @@ export type ContactCreateWithoutConversationsInput = {
   phone?: string | null
   email?: string | null
   channel?: string
+  origin?: string | null
   sentiment?: string
   leadScore?: number
   stage?: string
@@ -1031,6 +1062,7 @@ export type ContactUncheckedCreateWithoutConversationsInput = {
   phone?: string | null
   email?: string | null
   channel?: string
+  origin?: string | null
   sentiment?: string
   leadScore?: number
   stage?: string
@@ -1072,6 +1104,7 @@ export type ContactUpdateWithoutConversationsInput = {
   phone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   email?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   channel?: Prisma.StringFieldUpdateOperationsInput | string
+  origin?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   sentiment?: Prisma.StringFieldUpdateOperationsInput | string
   leadScore?: Prisma.IntFieldUpdateOperationsInput | number
   stage?: Prisma.StringFieldUpdateOperationsInput | string
@@ -1097,6 +1130,7 @@ export type ContactUncheckedUpdateWithoutConversationsInput = {
   phone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   email?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   channel?: Prisma.StringFieldUpdateOperationsInput | string
+  origin?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   sentiment?: Prisma.StringFieldUpdateOperationsInput | string
   leadScore?: Prisma.IntFieldUpdateOperationsInput | number
   stage?: Prisma.StringFieldUpdateOperationsInput | string
@@ -1122,6 +1156,7 @@ export type ContactCreateWithoutCampaignSendsInput = {
   phone?: string | null
   email?: string | null
   channel?: string
+  origin?: string | null
   sentiment?: string
   leadScore?: number
   stage?: string
@@ -1147,6 +1182,7 @@ export type ContactUncheckedCreateWithoutCampaignSendsInput = {
   phone?: string | null
   email?: string | null
   channel?: string
+  origin?: string | null
   sentiment?: string
   leadScore?: number
   stage?: string
@@ -1188,6 +1224,7 @@ export type ContactUpdateWithoutCampaignSendsInput = {
   phone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   email?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   channel?: Prisma.StringFieldUpdateOperationsInput | string
+  origin?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   sentiment?: Prisma.StringFieldUpdateOperationsInput | string
   leadScore?: Prisma.IntFieldUpdateOperationsInput | number
   stage?: Prisma.StringFieldUpdateOperationsInput | string
@@ -1213,6 +1250,7 @@ export type ContactUncheckedUpdateWithoutCampaignSendsInput = {
   phone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   email?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   channel?: Prisma.StringFieldUpdateOperationsInput | string
+  origin?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   sentiment?: Prisma.StringFieldUpdateOperationsInput | string
   leadScore?: Prisma.IntFieldUpdateOperationsInput | number
   stage?: Prisma.StringFieldUpdateOperationsInput | string
@@ -1287,6 +1325,7 @@ export type ContactSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs 
   phone?: boolean
   email?: boolean
   channel?: boolean
+  origin?: boolean
   sentiment?: boolean
   leadScore?: boolean
   stage?: boolean
@@ -1314,6 +1353,7 @@ export type ContactSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Exten
   phone?: boolean
   email?: boolean
   channel?: boolean
+  origin?: boolean
   sentiment?: boolean
   leadScore?: boolean
   stage?: boolean
@@ -1336,6 +1376,7 @@ export type ContactSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Exten
   phone?: boolean
   email?: boolean
   channel?: boolean
+  origin?: boolean
   sentiment?: boolean
   leadScore?: boolean
   stage?: boolean
@@ -1358,6 +1399,7 @@ export type ContactSelectScalar = {
   phone?: boolean
   email?: boolean
   channel?: boolean
+  origin?: boolean
   sentiment?: boolean
   leadScore?: boolean
   stage?: boolean
@@ -1372,7 +1414,7 @@ export type ContactSelectScalar = {
   updatedAt?: boolean
 }
 
-export type ContactOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "name" | "avatarUrl" | "handle" | "phone" | "email" | "channel" | "sentiment" | "leadScore" | "stage" | "dealValue" | "notes" | "location" | "company" | "customFields" | "lastActive" | "optedOut" | "createdAt" | "updatedAt", ExtArgs["result"]["contact"]>
+export type ContactOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "name" | "avatarUrl" | "handle" | "phone" | "email" | "channel" | "origin" | "sentiment" | "leadScore" | "stage" | "dealValue" | "notes" | "location" | "company" | "customFields" | "lastActive" | "optedOut" | "createdAt" | "updatedAt", ExtArgs["result"]["contact"]>
 export type ContactInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   contactTags?: boolean | Prisma.Contact$contactTagsArgs<ExtArgs>
   interactions?: boolean | Prisma.Contact$interactionsArgs<ExtArgs>
@@ -1399,6 +1441,7 @@ export type $ContactPayload<ExtArgs extends runtime.Types.Extensions.InternalArg
     phone: string | null
     email: string | null
     channel: string
+    origin: string | null
     sentiment: string
     leadScore: number
     stage: string
@@ -1845,6 +1888,7 @@ export interface ContactFieldRefs {
   readonly phone: Prisma.FieldRef<"Contact", 'String'>
   readonly email: Prisma.FieldRef<"Contact", 'String'>
   readonly channel: Prisma.FieldRef<"Contact", 'String'>
+  readonly origin: Prisma.FieldRef<"Contact", 'String'>
   readonly sentiment: Prisma.FieldRef<"Contact", 'String'>
   readonly leadScore: Prisma.FieldRef<"Contact", 'Int'>
   readonly stage: Prisma.FieldRef<"Contact", 'String'>

@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { contactCreateSchema, campaignCreateSchema, apiKeyCreateSchema } from '@/lib/schemas';
+import {
+  contactCreateSchema,
+  campaignCreateSchema,
+  apiKeyCreateSchema,
+  incomingPayloadSchema,
+} from '@/lib/schemas';
 
 const contactoValido = {
   name: 'Valeria Gomez',
@@ -11,6 +16,14 @@ const contactoValido = {
 describe('contactCreateSchema', () => {
   it('acepta un contacto valido', () => {
     expect(contactCreateSchema.safeParse(contactoValido).success).toBe(true);
+  });
+
+  it('acepta un origen libre recibido desde n8n', () => {
+    expect(contactCreateSchema.safeParse({ ...contactoValido, origin: 'facebook_ads' }).success).toBe(true);
+  });
+
+  it('rechaza un origen demasiado largo', () => {
+    expect(contactCreateSchema.safeParse({ ...contactoValido, origin: 'a'.repeat(121) }).success).toBe(false);
   });
 
   it('rechaza campos que no estan en el esquema', () => {
@@ -32,6 +45,20 @@ describe('contactCreateSchema', () => {
   it('rechaza un canal fuera del enum', () => {
     const malCanal = { ...contactoValido, channel: 'telegram' };
     expect(contactCreateSchema.safeParse(malCanal).success).toBe(false);
+  });
+});
+
+describe('incomingPayloadSchema', () => {
+  it('acepta channel como origen recibido por una integracion', () => {
+    const payload = incomingPayloadSchema.safeParse({
+      messageId: 'message-1',
+      from: '51987654321@s.whatsapp.net',
+      channel: 'facebook_ads',
+      text: 'Hola',
+    });
+
+    expect(payload.success).toBe(true);
+    if (payload.success) expect(payload.data.channel).toBe('facebook_ads');
   });
 });
 

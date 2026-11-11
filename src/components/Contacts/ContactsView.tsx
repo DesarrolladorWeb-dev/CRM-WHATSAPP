@@ -18,6 +18,7 @@ import { contactCreateSchema, normalizarTelefonoPeru, primerErrorDeZod } from '@
 import { apiFetch } from '@/lib/apiClient';
 import { AI_MODEL_NAME } from '@/lib/constants';
 import { WhatsAppIcon, XBrandIcon, MessengerIcon } from '@/components/Icons/ChannelIcons';
+import { ContactOriginBadge } from '@/components/Icons/ContactOriginBadge';
 // Filas visibles por pagina en la vista "Tabla".
 const TABLE_PAGE_SIZE = 20;
 
@@ -181,7 +182,10 @@ const MobileContactCard: React.FC<{
           <p className="text-[11px] text-slate-500 dark:text-slate-400 font-mono truncate">
             {contact.email ? `📧 ${contact.email}` : `📱 ${contact.phone || contact.handle}`}
           </p>
-          <div className="mt-1 text-[11px]">{getChannelBadge(contact.channel)}</div>
+          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px]">
+            {getChannelBadge(contact.channel)}
+            <ContactOriginBadge origin={contact.origin} />
+          </div>
         </div>
         <span className="shrink-0 text-slate-900 dark:text-slate-100 font-black text-xs tracking-tight bg-slate-100 dark:bg-slate-900 px-2 py-0.5 rounded-lg border border-slate-200 dark:border-slate-700">
           💰 ${contact.dealValue.toLocaleString()}
@@ -398,6 +402,7 @@ export const ContactsView: React.FC<ContactsViewProps> = ({
 }) => {
   const [viewMode, setViewMode] = useState<'kanban' | 'table'>('kanban');
   const [selectedChannel, setSelectedChannel] = useState<string>('all');
+  const [selectedOrigin, setSelectedOrigin] = useState<string>('all');
   const [isAddModalOpen, setIsAddModalOpen] = useState<boolean>(false);
   const [addContactError, setAddContactError] = useState<string | null>(null);
   const [isSavingContact, setIsSavingContact] = useState<boolean>(false);
@@ -594,13 +599,19 @@ export const ContactsView: React.FC<ContactsViewProps> = ({
   ];
 
   // Filter Contacts
+  const originOptions = Array.from(
+    new Set(contacts.map((contact) => contact.origin?.trim()).filter((origin): origin is string => Boolean(origin)))
+  ).sort((a, b) => a.localeCompare(b));
+
   const filteredContacts = contacts.filter(c => {
     const matchesChannel = selectedChannel === 'all' || c.channel === selectedChannel;
+    const matchesOrigin = selectedOrigin === 'all' || c.origin === selectedOrigin;
     const matchesSearch = !searchQuery ||
       c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       c.handle.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      c.tags.some(t => t.toLowerCase().includes(searchQuery.toLowerCase()));
-    return matchesChannel && matchesSearch;
+      c.tags.some(t => t.toLowerCase().includes(searchQuery.toLowerCase())) ||
+      c.origin?.toLowerCase().includes(searchQuery.toLowerCase());
+    return matchesChannel && matchesOrigin && matchesSearch;
   });
 
   // Calculate Totals
@@ -713,7 +724,7 @@ export const ContactsView: React.FC<ContactsViewProps> = ({
   // ajusta durante el render (patron recomendado por React) en vez de en un
   // efecto. Si la pagina queda fuera de rango (p. ej. al borrar contactos),
   // `safeTablePage` ya la acota.
-  const tableFilterKey = `${searchQuery}|${selectedChannel}|${viewMode}`;
+  const tableFilterKey = `${searchQuery}|${selectedChannel}|${selectedOrigin}|${viewMode}`;
   const [prevTableFilterKey, setPrevTableFilterKey] = useState(tableFilterKey);
   if (tableFilterKey !== prevTableFilterKey) {
     setPrevTableFilterKey(tableFilterKey);
@@ -902,6 +913,18 @@ const isNewContactFormValid = trimmedName.length > 0;
             <option value="messenger">Messenger</option>
           </select>
 
+          <select
+            value={selectedOrigin}
+            onChange={(e) => setSelectedOrigin(e.target.value)}
+            aria-label="Filtrar por origen"
+            className="w-full sm:w-auto px-3.5 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-800 dark:text-slate-100 font-extrabold focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+          >
+            <option value="all">Todos los Orígenes</option>
+            {originOptions.map((origin) => (
+              <option key={origin} value={origin}>{origin}</option>
+            ))}
+          </select>
+
           {viewMode === 'table' && (
             tableSelectionMode ? (
               <div className="flex items-center gap-2">
@@ -1047,7 +1070,10 @@ const isNewContactFormValid = trimmedName.length > 0;
                             <div className="grid grid-cols-3 items-center w-full mb-1">
                               <span />
                               <div className="justify-self-center">
-                                {getChannelBadge(contact.channel)}
+                                <div className="flex flex-col items-center gap-1">
+                                  {getChannelBadge(contact.channel)}
+                                  <ContactOriginBadge origin={contact.origin} />
+                                </div>
                               </div>
                               <input
                                 type="checkbox"
@@ -1418,7 +1444,10 @@ const isNewContactFormValid = trimmedName.length > 0;
                         </div>
                       </td>
                       <td className="p-3.5 capitalize font-bold">
-                        {getChannelBadge(contact.channel)}
+                        <div className="space-y-1">
+                          {getChannelBadge(contact.channel)}
+                          <ContactOriginBadge origin={contact.origin} />
+                        </div>
                       </td>
                       <td className="p-3.5">
                         <span className="px-2.5 py-1 bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 text-[11px] font-bold rounded-xl border border-slate-200 dark:border-slate-700 flex items-center gap-1 w-fit">
@@ -1750,7 +1779,7 @@ const isNewContactFormValid = trimmedName.length > 0;
 
           <div className="grid grid-cols-2 gap-3">
             <Select
-              label="Canal de Origen"
+              label="Canal de Comunicación"
               value={formData.channel}
               onChange={(e) => setFormData({ ...formData, channel: e.target.value as SocialChannel })}
             >

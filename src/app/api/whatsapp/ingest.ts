@@ -38,6 +38,8 @@ export interface MediaData {
 
 export interface IncomingPayload {
   messageId?: string;
+  channel?: string;
+  origin?: string;
   from?: string;
   fromName?: string;
   timestamp?: number;
@@ -50,7 +52,7 @@ export interface IncomingPayload {
   isLid?: boolean;
   lidBase?: string;
   resolvedPhone?: string;
-  rawMessage?: any
+  rawMessage?: unknown;
 }
 
 function sanitizeName(raw: string | undefined, fallback: string): string {
@@ -137,6 +139,7 @@ function contactToApi(row: {
   company?: string | null;
   avatarUrl?: string | null;
   avatar?: string;
+  origin?: string | null;
 }): Contact {
   return {
     id: row.id,
@@ -147,6 +150,7 @@ function contactToApi(row: {
     avatar: row.avatarUrl || row.avatar || avatarPara(row.name || row.id, esNombreReal(row.name)),
     handle: row.handle,
     phone: row.phone ?? undefined,
+    origin: row.origin ?? undefined,
     channel: 'whatsapp',
     tags: [],
     sentiment: 'neutral',
@@ -284,6 +288,7 @@ export async function handleIncomingPayload(body: IncomingPayload): Promise<Next
         handle: contactHandle,
         phone: contactPhone,
         channel: 'whatsapp',
+        origin: body.origin ?? body.channel,
         sentiment: 'neutral',
         leadScore: 50,
         stage: 'lead',
@@ -296,6 +301,13 @@ export async function handleIncomingPayload(body: IncomingPayload): Promise<Next
       });
       isNewContact = true;
     } else {
+      if (!contact.origin && (body.origin || body.channel)) {
+        await db.contact.update({
+          where: { id: contact.id },
+          data: { origin: body.origin ?? body.channel },
+        });
+        contact.origin = body.origin ?? body.channel ?? null;
+      }
       // Si el contacto ya existe pero no tiene phone y tenemos uno resuelto, actualizarlo
       if (!contact.phone && contactPhone) {
         await db.contact.update({

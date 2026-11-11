@@ -52,6 +52,7 @@ import { LoginView } from '@/components/Login/LoginView';
 import { User } from '../generated/prisma/client';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { InteractiveContent, interactiveToText, parseInteractive } from '@/lib/whatsappInteractive';
+import { originFromMessage } from '@/lib/contactOrigin';
 
 const LOCAL_STORAGE_QUICK_REPLIES_KEY = 'whato_crm_quick_replies_v2';
 
@@ -684,6 +685,7 @@ export default function HomePage() {
       || (resolvedPhone ? formatPhoneDisplay(resolvedPhone) : 'Contacto WhatsApp');
     const interactive = parseInteractive(raw.rawMessage)
     const text = String(raw.text || '') || (interactive ? interactiveToText(interactive) : '');
+    const origin = originFromMessage(text);
     const receivedAt = raw.receivedAt ? new Date(raw.receivedAt) : new Date();
     const timestampLbl = formatTime(receivedAt);
 
@@ -715,7 +717,8 @@ export default function HomePage() {
           isLid: fromIsLid,
           lidBase: lidBase || undefined,
           resolvedPhone,
-          rawMessage: raw.rawMessage
+          rawMessage: raw.rawMessage,
+          origin,
         }),
       });
       if (res.ok) {

@@ -5,6 +5,7 @@ import { connectToDatabase, isDbConnected } from '@/lib/mongodb';
 import { MessageModel } from '@/models/Message';
 import { deleteMediaDir } from '@/lib/mediaStorage';
 import { logger, motivo } from '@/lib/logger';
+import { originFromMessage } from '@/lib/contactOrigin';
 
 type ContactRow = Prisma.ContactGetPayload<{
   include: { contactTags: { include: { tag: true } }; interactions: true };
@@ -24,6 +25,7 @@ function toApiContact(row: ContactRow): Contact & { createdAt?: Date; updatedAt?
     phone: row.phone ?? undefined,
     email: row.email ?? undefined,
     channel: row.channel as Contact['channel'],
+    origin: row.origin ?? undefined,
     tags: row.contactTags.map((ct) => ct.tag.name),
     sentiment: row.sentiment as Contact['sentiment'],
     leadScore: row.leadScore,
@@ -58,6 +60,7 @@ function scalarData(input: ContactInput): Prisma.ContactUncheckedCreateInput | P
   if (input.phone !== undefined) data.phone = input.phone;
   if (input.email !== undefined) data.email = input.email;
   if (input.channel !== undefined) data.channel = input.channel;
+  if (input.origin !== undefined) data.origin = input.origin;
   if (input.sentiment !== undefined) data.sentiment = input.sentiment;
   if (input.leadScore !== undefined) data.leadScore = input.leadScore;
   if (input.stage !== undefined) data.stage = input.stage;
@@ -72,7 +75,7 @@ function scalarData(input: ContactInput): Prisma.ContactUncheckedCreateInput | P
 
 export async function listContacts(
   db: PrismaClient,
-  filter: { channel?: string | null; stage?: string | null } = {}
+  filter: { channel?: string | null; origin?: string | null; stage?: string | null } = {}
 ): Promise<Contact[]> {
   const where: Prisma.ContactWhereInput = {};
   if (filter.channel && filter.channel !== 'all') where.channel = filter.channel;
@@ -83,7 +86,58 @@ export async function listContacts(
     include: withRelations,
     orderBy: { updatedAt: 'desc' },
   });
-  return rows.map(toApiContact);
+  const contacts = rows.map(toApiContact);
+  const contactsWithoutOrigin = contacts.filter((contact) => !contact.origin);
+
+  if (contactsWithoutOrigin.length > 0) {
+    try {
+      const mongo = await connectToDatabase();
+      if (mongo && isDbConnected()) {
+        const contactIds = contactsWithoutOrigin.map((contact) => contact.id);
+        const conversations = await db.conversation.findMany({
+          where: { contactId: { in: contactIds } },
+          select: { id: true, contactId: true },
+        });
+        const contactIdByConversationId = new Map(
+          conversations.map((conversation) => [conversation.id, conversation.contactId])
+        );
+        const conversationIds = conversations.map((conversation) => conversation.id);
+
+        if (conversationIds.length > 0) {
+          const messages = await MessageModel.find({
+            conversationId: { $in: conversationIds },
+            sender: 'contact',
+            text: /Plataforma\s*:/i,
+          })
+            .select({ conversationId: 1, text: 1, createdAt: 1 })
+            .sort({ createdAt: 1 })
+            .lean();
+          const originByContactId = new Map<string, string>();
+
+          for (const message of messages) {
+            const contactId = contactIdByConversationId.get(message.conversationId);
+            const origin = originFromMessage(message.text ?? '');
+            if (contactId && origin && !originByContactId.has(contactId)) {
+              originByContactId.set(contactId, origin);
+            }
+          }
+
+          for (const contact of contactsWithoutOrigin) {
+            const inferredOrigin = originByContactId.get(contact.id);
+            if (inferredOrigin) contact.origin = inferredOrigin;
+          }
+        }
+      }
+    } catch (error) {
+      logger.warn('contactRepo.listContacts: no se pudo inferir origen desde mensajes anteriores', {
+        motivo: motivo(error),
+      });
+    }
+  }
+
+  return filter.origin && filter.origin !== 'all'
+    ? contacts.filter((contact) => contact.origin === filter.origin)
+    : contacts;
 }
 
 export async function getContact(db: PrismaClient, id: string): Promise<Contact | null> {

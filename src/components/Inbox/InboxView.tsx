@@ -28,6 +28,8 @@ import { WhatsAppIcon, XBrandIcon, MessengerIcon } from '@/components/Icons/Chan
 import { Button, Modal } from '../ui';
 import { InteractiveButtons } from './InteractiveButtons';
 import { InteractiveContent } from '@/lib/whatsappInteractive';
+import { originMatchesChannelFilter } from '@/lib/contactOrigin';
+import { ContactOriginBadge } from '@/components/Icons/ContactOriginBadge';
 interface InboxViewProps {
   canDeleteContacts: boolean;
   conversations: Conversation[];
@@ -370,7 +372,8 @@ export const InboxView: React.FC<InboxViewProps> = ({
   };
 
   const filteredConversations = conversations.filter(c => {
-    const matchesChannel = channelFilter === 'all' || c.channel === channelFilter;
+    const matchesChannel = channelFilter === 'all' ||
+      originMatchesChannelFilter(channelFilter, c.contact.origin || c.contact.channel);
     const matchesSearch = !searchQuery ||
       c.contact.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       c.lastMessage.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -973,6 +976,7 @@ export const InboxView: React.FC<InboxViewProps> = ({
                   <div className="flex items-center gap-2 min-w-0">
                     <h3 className="font-extrabold text-sm text-slate-900 dark:text-slate-100 truncate min-w-0">{contact.name}</h3>
                     {getChannelBadge(contact.channel)}
+                    <ContactOriginBadge origin={contact.origin} />
                   </div>
                   <p className="text-xs text-slate-500 font-medium flex items-center gap-1 min-w-0 overflow-hidden whitespace-nowrap">
                     {/* <span className="flex items-center gap-1 truncate min-w-0"><Building2 className="w-3 h-3 shrink-0" /> <span className="truncate">{'Empresa'}</span></span>
@@ -1767,6 +1771,16 @@ export const InboxView: React.FC<InboxViewProps> = ({
             <div className="flex items-center gap-2 text-slate-700 dark:text-slate-300 font-medium text-xs">
               <Mail className="w-3.5 h-3.5" />
               <span>{contact.email || 'Sin correo'}</span>
+            </div>
+            <div className="flex items-center gap-2 text-slate-700 dark:text-slate-300 font-medium text-xs">
+              {contact.origin ? (
+                <ContactOriginBadge origin={contact.origin} />
+              ) : (
+                <>
+                  <Globe className="w-3.5 h-3.5" />
+                  <span>Origen: No especificado</span>
+                </>
+              )}
             </div>
           </CollapsibleSection>
 

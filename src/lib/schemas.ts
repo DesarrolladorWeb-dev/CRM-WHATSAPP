@@ -202,6 +202,12 @@ const contactFields = {
     .optional()
     .or(z.literal('')),
   channel: socialChannel.optional(),
+  origin: z
+    .string()
+    .trim()
+    .max(120, 'El origen no puede pasar de 120 caracteres')
+    .transform((valor) => valor || undefined)
+    .optional(),
   // El mismo tope de 60 que impone POST /api/tags. Sin el, crear una etiqueta
   // desde un contacto se llevaba el limite por delante.
   tags: z.array(textoCorto(60, 'Cada etiqueta').min(1)).max(20, 'Un contacto no puede tener mas de 20 etiquetas').optional(),
@@ -570,6 +576,8 @@ export const incomingPayloadSchema = z
       .max(64)
       .nullish()
       .transform((valor) => valor ?? undefined),
+    channel: z.string().trim().max(120).nullish().transform((valor) => valor || undefined),
+    origin: z.string().trim().max(120).nullish().transform((valor) => valor || undefined),
     // `from` es el JID ("51953123123@s.whatsapp.net" o "273...@lid") o, si
     // no hay JID, un nombre suelto. De ahi viene la confusion historica que
     // hizo que un contacto se llamara "+51 213 123 123".

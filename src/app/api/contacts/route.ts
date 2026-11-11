@@ -15,34 +15,59 @@ import { contactCreateSchema, contactUpdateSchema, primerErrorDeZod } from '@/li
 import { logger, motivo } from '@/lib/logger';
 import { requireUserPermission } from '@/lib/auth';
 
+const SOCIAL_CHANNELS = new Set(['whatsapp', 'instagram', 'twitter', 'messenger', 'email']);
+
+function mapearCanalDeN8nComoOrigen(body: unknown, crearContacto = false): unknown {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return body;
+
+  const data = body as Record<string, unknown>;
+  if (typeof data.channel !== 'string' || SOCIAL_CHANNELS.has(data.channel)) return body;
+
+  const { channel, ...rest } = data;
+  return {
+    ...rest,
+    ...(crearContacto ? { channel: 'whatsapp' } : {}),
+    origin: data.origin || channel,
+  };
+}
+
 export async function GET(req: NextRequest) {
   const denied = await requireUserPermission(req, 'read');
   if (denied) return denied;
+
+  const { searchParams } = new URL(req.url);
+  const filters = {
+    channel: searchParams.get('channel'),
+    origin: searchParams.get('origin'),
+    stage: searchParams.get('stage'),
+  };
+  const demoContacts = () =>
+    INITIAL_CONTACTS.filter((contact) =>
+      (!filters.channel || filters.channel === 'all' || contact.channel === filters.channel) &&
+      (!filters.origin || filters.origin === 'all' || contact.origin === filters.origin) &&
+      (!filters.stage || filters.stage === 'all' || contact.stage === filters.stage)
+    );
 
   try {
     const db = await connectToPostgres();
     if (!db) {
       if (DEMO_MODE) {
-        return NextResponse.json({ success: true, source: 'demo', data: INITIAL_CONTACTS });
+        return NextResponse.json({ success: true, source: 'demo', data: demoContacts() });
       }
       return dbUnavailableResponse();
     }
 
-    const { searchParams } = new URL(req.url);
-    const contacts = await listContacts(db, {
-      channel: searchParams.get('channel'),
-      stage: searchParams.get('stage'),
-    });
+    const contacts = await listContacts(db, filters);
 
     if (contacts.length === 0 && DEMO_MODE) {
-      return NextResponse.json({ success: true, source: 'demo', data: INITIAL_CONTACTS });
+      return NextResponse.json({ success: true, source: 'demo', data: demoContacts() });
     }
     return NextResponse.json({ success: true, source: 'postgres', data: contacts });
   } catch (error) {
     const errorId = captureException(error, { route: '/api/contacts', method: 'GET' });
     logger.error('Error in GET /api/contacts', { motivo: motivo(error) });
     if (DEMO_MODE) {
-      return NextResponse.json({ success: true, source: 'demo', data: INITIAL_CONTACTS });
+      return NextResponse.json({ success: true, source: 'demo', data: demoContacts() });
     }
     return NextResponse.json(
       { success: false, error: 'No se pudieron obtener los contactos', errorId },
@@ -62,7 +87,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const resultado = contactCreateSchema.safeParse(body);
+    const resultado = contactCreateSchema.safeParse(mapearCanalDeN8nComoOrigen(body, true));
     if (!resultado.success) {
       return NextResponse.json(
         { success: false, error: primerErrorDeZod(resultado.error), details: resultado.error.flatten() },
@@ -143,7 +168,7 @@ export async function PUT(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const parsed = contactUpdateSchema.safeParse(body);
+    const parsed = contactUpdateSchema.safeParse(mapearCanalDeN8nComoOrigen(body));
     if (!parsed.success) {
       return NextResponse.json(
         { success: false, error: primerErrorDeZod(parsed.error), details: parsed.error.flatten() },

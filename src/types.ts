@@ -55,6 +55,7 @@ export interface Contact {
   phone?: string;
   email?: string;
   channel: SocialChannel;
+  origin?: string;
   tags: string[];
   sentiment: LeadSentiment;
   leadScore: number; // 0 to 100
