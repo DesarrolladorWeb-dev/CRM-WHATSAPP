@@ -259,19 +259,46 @@ export function getWhatsappStatus(): Promise<AsService<WhatsappStatus>> {
 }
 
 /** POST /api/whatsapp/send-message (mensaje de texto generico). */
-export function sendTextMessage(
+
+/** Envía mensajes mediante la API autenticada del CRM. */
+export async function sendTextMessage(
   phone: string,
   message: string
 ): Promise<AsService<{ messageId?: string; chatId?: string }>> {
-  // Determinar si es un LID o un número telefónico
-  const jidToSend = getJidForSending(phone);
+  try {
+    const jidToSend = getJidForSending(phone);
 
-  return unwrap<{ messageId?: string; chatId?: string }>(
-    request<{ messageId?: string; chatId?: string }>('/api/whatsapp/send-message', {
+    const response = await fetch('/api/whatsapp/send-message', {
       method: 'POST',
-      body: JSON.stringify({ phone: jidToSend, message }),
-    })
-  );
+      credentials: 'same-origin',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        phone: jidToSend,
+        message,
+      }),
+    });
+
+    const resultado = await response.json();
+
+    if (!response.ok || resultado.success === false) {
+      return {
+        ok: false,
+        error: resultado.error || `WhatsApp: HTTP ${response.status}`,
+      } as AsService<{ messageId?: string; chatId?: string }>;
+    }
+
+    return {
+      ok: true,
+      data: resultado.data ?? resultado,
+    } as AsService<{ messageId?: string; chatId?: string }>;
+  } catch {
+    return {
+      ok: false,
+      error: 'No se pudo enviar el mensaje de WhatsApp',
+    } as AsService<{ messageId?: string; chatId?: string }>;
+  }
 }
 
 /** POST /api/whatsapp/send-product-info (imagen + mensaje). */
@@ -319,15 +346,44 @@ export function sendMediaMessage(
 }
 
 /** GET /api/whatsapp/received-messages */
-export function getReceivedMessages(
+
+/** Obtiene mensajes mediante la API autenticada del CRM. */
+export async function getReceivedMessages(
   limit = 50
 ): Promise<AsService<{ messages: ReceivedWhatsAppMessage[]; total: number }>> {
-  return unwrap<{ messages: ReceivedWhatsAppMessage[]; total: number }>(
-    request<{ messages: ReceivedWhatsAppMessage[]; total: number }>(
-      `/api/whatsapp/received-messages?limit=${limit}`
-    )
-  );
+  try {
+    const response = await fetch(
+      `/api/whatsapp/received-messages?limit=${limit}`,
+      {
+        credentials: 'same-origin',
+        cache: 'no-store',
+      }
+    );
+
+    if (!response.ok) {
+      return {
+        ok: false,
+        error: `Error HTTP ${response.status}`,
+      } as AsService<{ messages: ReceivedWhatsAppMessage[]; total: number }>;
+    }
+
+    const resultado = await response.json();
+
+    return {
+      ok: true,
+      data: {
+        messages: resultado.messages ?? [],
+        total: resultado.total ?? 0,
+      },
+    } as AsService<{ messages: ReceivedWhatsAppMessage[]; total: number }>;
+  } catch (error) {
+    return {
+      ok: false,
+      error: 'No se pudieron obtener los mensajes de WhatsApp',
+    } as AsService<{ messages: ReceivedWhatsAppMessage[]; total: number }>;
+  }
 }
+
 
 /** POST /api/whatsapp/webhook (registra el webhook del CRM en el servicio). */
 export function registerWebhook(

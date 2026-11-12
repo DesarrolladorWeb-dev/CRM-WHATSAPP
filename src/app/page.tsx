@@ -402,7 +402,8 @@ export default function HomePage() {
     };
   }, [activeConversationId, mounted]);
 
-  const isWhatsappServiceActive = isWhatsappSocketConnected;
+ const isWhatsappServiceActive =
+  isWhatsappSocketConnected || whatsappStatus?.isConnected === true;
   const visibleConversations = isWhatsappServiceActive
     ? conversations
     : conversations.filter(c => c.channel !== 'whatsapp');
@@ -974,18 +975,34 @@ export default function HomePage() {
       outgoingHandlerRef.current(msg);
     });
     socket.on('disconnect', () => {
-      setIsWhatsappSocketConnected(false);
-      setWhatsappStatus(prev =>
-        prev ? { ...prev, isConnected: false, connectionStatus: 'disconnected' } : prev
-      );
-    });
+  setIsWhatsappSocketConnected(false);
+});
 
     // Estado inicial + historial reciente cuando el CRM arranca.
-    getWhatsappStatus().then(st => {
-      if (st.ok && st.data) {
-        setWhatsappStatus(st.data);
-      }
+    const actualizarEstadoWhatsapp = async () => {
+  try {
+    const respuesta = await apiFetch('/api/whatsapp/status', {
+      cache: 'no-store',
     });
+
+    if (!respuesta.ok) {
+      console.error('Error consultando WhatsApp:', respuesta.status);
+      return;
+    }
+
+    const resultado = await respuesta.json();
+
+   if (resultado.connectionStatus) {
+  setWhatsappStatus(resultado);
+}
+  } catch (error) {
+    console.error('Error de conexión WhatsApp:', error);
+  }
+};
+
+actualizarEstadoWhatsapp();
+
+const intervaloWhatsapp = setInterval(actualizarEstadoWhatsapp, 5000);
     getReceivedMessages(50).then(res => {
       if (res.ok && Array.isArray(res.data.messages)) {
         res.data.messages.forEach(m => incomingHandlerRef.current(m));
@@ -996,6 +1013,7 @@ export default function HomePage() {
       socket.disconnect();
       whatsappSocketRef.current = null;
       setIsWhatsappSocketConnected(false);
+      clearInterval(intervaloWhatsapp);
     };
   }, [mounted, authChecked, currentUser]);
 
@@ -1737,13 +1755,13 @@ export default function HomePage() {
           setSearchQuery={setSearchQuery}
           onToggleSidebar={() => setIsSidebarOpen(prev => !prev)}
           conversations={conversations}
-          whatsappStatus={
-            !isWhatsappSocketConnected
-              ? 'inactive'
-              : whatsappStatus?.connectionStatus === 'connected'
-                ? 'active-session'
-                : 'active-no-session'
-          }
+         whatsappStatus={
+  whatsappStatus?.isConnected === true
+    ? 'active-session'
+    : isWhatsappSocketConnected
+      ? 'active-no-session'
+      : 'inactive'
+}
           sessionPhone={formatPhoneDisplay(getSessionPhone(whatsappStatus))}
           sessionName={getSessionName(whatsappStatus) || undefined}
           onConnectWhatsapp={() => setShowWhatsappModal(true)}
