@@ -20,6 +20,7 @@ import {
 import { QuickRepliesModal } from './QuickRepliesModal';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { VoiceNotePlayer } from './VoiceNotePlayer';
+import { MediaLightbox } from './MediaLightbox';
 import { AppRouterInstance } from 'next/dist/shared/lib/app-router-context.shared-runtime';
 import { ReadonlyURLSearchParams } from 'next/navigation';
 import { AI_MODEL_NAME } from '@/lib/constants';
@@ -63,6 +64,21 @@ interface CollapsibleSectionProps {
 }
 
 const URL_RE = /(https?:\/\/[^\s]+)/g
+
+// La multimedia nueva se sirve desde /api/media/... (disco);
+// los mensajes antiguos siguen trayendo el base64 embebido.
+function getMessageMediaSrc(msg: Message): string {
+  return (
+    msg.mediaUrl ||
+    (msg.media?.data ? `data:${msg.media.mimetype};base64,${msg.media.data}` : '')
+  )
+}
+
+function isImageMessage(msg: Message): boolean {
+  const src = getMessageMediaSrc(msg)
+  if (!src || !(msg.hasMedia || msg.mediaUrl)) return false
+  return msg.mediaType === 'image' || (!msg.mediaType && !!msg.mediaUrl && !src.startsWith('data:audio/'))
+}
 
 function renderTextWithLinks(text: string) {
   return text.split(URL_RE).map((part, i) =>
@@ -268,6 +284,8 @@ export const InboxView: React.FC<InboxViewProps> = ({
   const [isQuickRepliesModalOpen, setIsQuickRepliesModalOpen] = useState<boolean>(false);
   const [attachedImageUrl, setAttachedImageUrl] = useState<string>('');
   const [showAttachInput, setShowAttachInput] = useState<boolean>(false);
+  // Id de la imagen abierta en el visor (null = cerrado).
+  const [lightboxImageId, setLightboxImageId] = useState<string | null>(null);
 
   const [showExtensionPanel, setShowExtensionPanel] = useState<boolean>(true);
   const [openPanelSections, setOpenPanelSections] = useState<Record<string, boolean>>({
@@ -689,6 +707,22 @@ export const InboxView: React.FC<InboxViewProps> = ({
         return <span className="px-2.5 py-0.5 bg-slate-100 border border-slate-300 text-slate-700 text-[10px] font-bold rounded-full shadow-2xs flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-slate-400" /> Neutral</span>;
     }
   };
+
+
+  // Imágenes de la conversación abierta, para navegar con ← / → en el visor.
+  const lightboxImages = activeMessages
+    .filter(isImageMessage)
+    .map((msg) => ({
+      id: msg.id,
+      src: getMessageMediaSrc(msg),
+      filename: msg.media?.filename || 'Imagen',
+    }));
+
+  // Guardamos el id (no el índice) para que el visor se cierre solo si al
+  // cambiar de conversación esa imagen ya no está en la galería.
+  const lightboxIndex = lightboxImageId
+    ? lightboxImages.findIndex((img) => img.id === lightboxImageId)
+    : -1;
 
 
   return (
@@ -1134,13 +1168,7 @@ export const InboxView: React.FC<InboxViewProps> = ({
                   msg.interactive?.body || msg.text,
                   msg.interactive?.footer
                 ].filter(Boolean).join('\n');
-                // La multimedia nueva se sirve desde /api/media/... (disco);
-                // los mensajes antiguos siguen trayendo el base64 embebido.
-                const mediaSrc =
-                  msg.mediaUrl ||
-                  (msg.media?.data
-                    ? `data:${msg.media.mimetype};base64,${msg.media.data}`
-                    : '');
+                const mediaSrc = getMessageMediaSrc(msg);
                 return (
                   <div
                     key={msg.id}
@@ -1167,12 +1195,20 @@ export const InboxView: React.FC<InboxViewProps> = ({
                         <>
                           {(msg.mediaType === 'image' || (!msg.mediaType && msg.mediaUrl && !msg.mediaUrl.startsWith('data:audio/'))) && (
                             <div className="mb-2 rounded-xl overflow-hidden border border-black/10 bg-black/5 shadow-2xs">
-                              <img
-                                src={mediaSrc}
-                                alt={msg.media?.filename || "Imagen"}
-                                className="w-full max-h-60 object-cover cursor-pointer hover:opacity-95 transition-opacity"
-                                onClick={() => window.open(mediaSrc, '_blank')}
-                              />
+                              {/* Se abre en el visor superpuesto, como en WhatsApp Web. */}
+                              <button
+                                type="button"
+                                onClick={() => setLightboxImageId(msg.id)}
+                                aria-label={`Ampliar imagen${msg.media?.filename ? `: ${msg.media.filename}` : ''}`}
+                                title="Ver imagen completa"
+                                className="block w-full cursor-zoom-in focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/60"
+                              >
+                                <img
+                                  src={mediaSrc}
+                                  alt={msg.media?.filename || "Imagen"}
+                                  className="w-full max-h-60 object-cover hover:opacity-95 transition-opacity"
+                                />
+                              </button>
                             </div>
                           )}
                           {msg.mediaType === 'video' && (
@@ -1976,6 +2012,13 @@ export const InboxView: React.FC<InboxViewProps> = ({
         message={`Esta acción eliminará ${selectedContactIds.size === 1 ? 'el contacto seleccionado' : `los ${selectedContactIds.size} contactos seleccionados`} y todas sus conversaciones en todos los canales, de forma permanente. No se puede deshacer.`}
         confirmLabel="Eliminar"
         tone="danger"
+      />
+
+      <MediaLightbox
+        images={lightboxImages}
+        index={lightboxIndex >= 0 ? lightboxIndex : null}
+        onClose={() => setLightboxImageId(null)}
+        onIndexChange={(next) => setLightboxImageId(lightboxImages[next]?.id ?? null)}
       />
     </div>
   );
