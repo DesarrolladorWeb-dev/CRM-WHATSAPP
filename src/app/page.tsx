@@ -53,6 +53,7 @@ import { User } from '../generated/prisma/client';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { InteractiveContent, interactiveToText, parseInteractive } from '@/lib/whatsappInteractive';
 import { originFromMessage } from '@/lib/contactOrigin';
+import { sortMessagesChronologically } from '@/lib/messageOrdering';
 
 const LOCAL_STORAGE_QUICK_REPLIES_KEY = 'whato_crm_quick_replies_v2';
 
@@ -391,7 +392,10 @@ export default function HomePage() {
         setMessagesMap(prev => {
           const fetchedIds = new Set(data.data.map((m: Message) => m.id));
           const pendingLocal = (prev[convId] || []).filter(m => !fetchedIds.has(m.id));
-          return { ...prev, [convId]: [...data.data, ...pendingLocal] };
+          return {
+            ...prev,
+            [convId]: sortMessagesChronologically([...data.data, ...pendingLocal]),
+          };
         });
       } catch {
         // La conversación mantiene los mensajes que ya tuviera en memoria.
@@ -418,6 +422,7 @@ export default function HomePage() {
     const newMsg: Message = {
       id: `m_${Date.now()}`,
       conversationId,
+      createdAt: new Date().toISOString(),
       sender: 'agent',
       senderName: 'Asistente XIO',
       text: interactive ? interactive.body : text,
@@ -456,8 +461,10 @@ export default function HomePage() {
     // Update Messages Map
     setMessagesMap(prev => ({
       ...prev,
-      [conversationId]: [
-        ...(prev[conversationId] || []),...(enviarImagenYTexto ? [imageMsg, textMsg] : [newMsg] ),]
+      [conversationId]: sortMessagesChronologically([
+        ...(prev[conversationId] || []),
+        ...(enviarImagenYTexto ? [imageMsg, textMsg] : [newMsg]),
+      ]),
     }));
 
     // Update Conversation Last Message
@@ -716,7 +723,10 @@ export default function HomePage() {
           // Detectar si el from es un LID y enviar los campos adicionales
           isLid: fromIsLid,
           lidBase: lidBase || undefined,
-          resolvedPhone,
+          // Si WhatsApp no pudo resolver el telefono de un LID, omitirlo
+          // mantiene compatibilidad con despliegues cuyo schema solo acepta
+          // este campo cuando contiene un numero.
+          resolvedPhone: resolvedPhone ?? undefined,
           rawMessage: raw.rawMessage,
           origin,
         }),
@@ -827,6 +837,7 @@ export default function HomePage() {
     const incomingMsg: Message = {
       id: saved?.message?.id || messageId,
       conversationId: targetId,
+      createdAt: saved?.message?.createdAt || receivedAt.toISOString(),
       sender: 'contact',
       senderName: name,
       text,
@@ -842,7 +853,9 @@ export default function HomePage() {
 
     setMessagesMap(prev => ({
       ...prev,
-      [targetId]: dedupeMessages([...(prev[targetId] || []), incomingMsg])
+      [targetId]: sortMessagesChronologically(
+        dedupeMessages([...(prev[targetId] || []), incomingMsg])
+      )
     }));
 
     // Si la conversacion esta abierta en pantalla, el mensaje se esta leyendo
@@ -936,6 +949,7 @@ export default function HomePage() {
     const botMsg: Message = {
       id: messageId,
       conversationId: targetId,
+      createdAt: new Date().toISOString(),
       sender: 'bot',
       senderName: 'Asistente XIO',
       text,
@@ -958,7 +972,10 @@ export default function HomePage() {
         thread.some(m => m.id === messageId) ||
         (text.length > 0 && !!last && last.sender === 'bot' && last.text === text);
       if (dup) return prev;
-      return { ...prev, [targetId]: [...thread, botMsg] };
+      return {
+        ...prev,
+        [targetId]: sortMessagesChronologically([...thread, botMsg]),
+      };
     });
 
     // Espejo de bumpLastMessage() en POST /api/messages: último mensaje + sin
@@ -1302,6 +1319,7 @@ export default function HomePage() {
       [newConvId]: [{
         id: `m_${Date.now()}`,
         conversationId: newConvId,
+        createdAt: new Date().toISOString(),
         sender: 'bot',
         senderName: 'XIO Engine',
         text: `Lead registrado vía ${newContact.channel.toUpperCase()}. Score inicial de IA: ${newContact.leadScore}%`,

@@ -537,12 +537,12 @@ const mediaTypeSchema = z.enum(['image', 'audio', 'video', 'document', 'sticker'
 const mediaDataSchema = z.object({
   mimetype: z.string().min(1).max(100),
   data: z.string().min(1),
-  size: z.number().int().min(0).optional(),
+  size: z.number().int().min(0).nullish().transform((valor) => valor ?? undefined),
   // El nombre viaja a la base de datos y se muestra en el chat: sin barras
   // ni rutas, que tampoco sirven para nada ahi.
   filename: z.string().max(200).regex(/^[^/\\]+$/, 'El nombre del archivo no puede contener rutas').nullable().optional(),
-  width: z.number().int().min(0).optional(),
-  height: z.number().int().min(0).optional(),
+  width: z.number().int().min(0).nullish().transform((valor) => valor ?? undefined),
+  height: z.number().int().min(0).nullish().transform((valor) => valor ?? undefined),
 });
 
 // `timestamp` llega como numero desde el servicio, pero n8n lo envia como

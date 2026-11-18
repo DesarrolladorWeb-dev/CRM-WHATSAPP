@@ -72,6 +72,7 @@ export interface Contact {
 export interface Message {
   id: string;
   conversationId: string;
+  createdAt?: string;
   sender: 'contact' | 'agent' | 'bot';
   senderName?: string;
   text: string;

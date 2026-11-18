@@ -176,6 +176,22 @@ describe('payload entrante de WhatsApp', () => {
     expect(incomingPayloadSchema.safeParse({ ...valido, hasMedia: true, mediaType: 'image', media }).success).toBe(false);
   });
 
+  it('acepta metadatos de multimedia null, como los stickers sin dimensiones', () => {
+    const r = incomingPayloadSchema.safeParse({
+      ...valido,
+      hasMedia: true,
+      mediaType: 'sticker',
+      media: { mimetype: 'image/webp', data: 'UklGRg==', size: null, width: null, height: null },
+    });
+
+    expect(r.success).toBe(true);
+    if (r.success) {
+      expect(r.data.media?.size).toBeUndefined();
+      expect(r.data.media?.width).toBeUndefined();
+      expect(r.data.media?.height).toBeUndefined();
+    }
+  });
+
   it('rechaza campos desconocidos', () => {
     expect(incomingPayloadSchema.safeParse({ ...valido, hack: 1 }).success).toBe(false);
   });
