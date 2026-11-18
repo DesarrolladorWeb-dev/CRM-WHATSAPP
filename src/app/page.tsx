@@ -53,20 +53,13 @@ import { User } from '../generated/prisma/client';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { InteractiveContent, interactiveToText, parseInteractive } from '@/lib/whatsappInteractive';
 import { originFromMessage } from '@/lib/contactOrigin';
-import { sortMessagesChronologically } from '@/lib/messageOrdering';
+import {
+  getMessageEventDate,
+  mergeMessagesChronologically,
+  sortMessagesChronologically,
+} from '@/lib/messageOrdering';
 
 const LOCAL_STORAGE_QUICK_REPLIES_KEY = 'whato_crm_quick_replies_v2';
-
-function dedupeMessages(messages: Message[]): Message[] {
-  const seen = new Set<string>();
-  const out: Message[] = [];
-  for (const m of messages) {
-    if (seen.has(m.id)) continue;
-    seen.add(m.id);
-    out.push(m);
-  }
-  return out;
-}
 
 function getMediaLabel(mediaType?: string): string {
   switch (mediaType) {
@@ -389,14 +382,13 @@ export default function HomePage() {
         const data = await res.json();
         if (cancelled || !data.success || !Array.isArray(data.data) || data.data.length === 0) return;
 
-        setMessagesMap(prev => {
-          const fetchedIds = new Set(data.data.map((m: Message) => m.id));
-          const pendingLocal = (prev[convId] || []).filter(m => !fetchedIds.has(m.id));
-          return {
-            ...prev,
-            [convId]: sortMessagesChronologically([...data.data, ...pendingLocal]),
-          };
-        });
+        setMessagesMap(prev => ({
+          ...prev,
+          [convId]: mergeMessagesChronologically([
+            ...data.data,
+            ...(prev[convId] || []),
+          ]),
+        }));
       } catch {
         // La conversación mantiene los mensajes que ya tuviera en memoria.
       }
@@ -694,7 +686,8 @@ export default function HomePage() {
     const text = String(raw.text || '') || (interactive ? interactiveToText(interactive) : '');
     const origin = originFromMessage(text);
     const receivedAt = raw.receivedAt ? new Date(raw.receivedAt) : new Date();
-    const timestampLbl = formatTime(receivedAt);
+    const messageDate = getMessageEventDate(raw.timestamp, receivedAt.toISOString());
+    const timestampLbl = formatTime(messageDate);
 
     let saved:
       | { contact?: Contact; conversation?: Conversation; message?: Message; isNewContact?: boolean; isNewConversation?: boolean }
@@ -837,7 +830,7 @@ export default function HomePage() {
     const incomingMsg: Message = {
       id: saved?.message?.id || messageId,
       conversationId: targetId,
-      createdAt: saved?.message?.createdAt || receivedAt.toISOString(),
+      createdAt: saved?.message?.createdAt || messageDate.toISOString(),
       sender: 'contact',
       senderName: name,
       text,
@@ -853,9 +846,7 @@ export default function HomePage() {
 
     setMessagesMap(prev => ({
       ...prev,
-      [targetId]: sortMessagesChronologically(
-        dedupeMessages([...(prev[targetId] || []), incomingMsg])
-      )
+      [targetId]: mergeMessagesChronologically([...(prev[targetId] || []), incomingMsg])
     }));
 
     // Si la conversacion esta abierta en pantalla, el mensaje se esta leyendo

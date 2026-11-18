@@ -15,6 +15,7 @@ import type { Contact, Conversation } from '@/types';
 import { requireWriteAccess } from '@/lib/auth';
 import { formatTimeFromIso } from '@/lib/time';
 import { interactiveToText, parseInteractive } from '@/lib/whatsappInteractive';
+import { getMessageEventDate } from '@/lib/messageOrdering';
 
 // Logica compartida de recepcion de mensajes entrantes de WhatsApp.
 //
@@ -216,8 +217,8 @@ export async function handleIncomingPayload(body: IncomingPayload): Promise<Next
 
     const interactive = parseInteractive(body.rawMessage)
     const text = String(body.text || '') || (interactive ? interactiveToText(interactive): '');
-    const receivedAt = body.receivedAt ? new Date(body.receivedAt) : new Date();
-    const timestampLbl = displayTime(body.receivedAt);
+    const messageDate = getMessageEventDate(body.timestamp, body.receivedAt);
+    const timestampLbl = displayTime(messageDate.toISOString());
 
     // Determinar el identificador único del contacto
     // Si es un LID, usar el lidBase como handle único
@@ -440,9 +441,12 @@ export async function handleIncomingPayload(body: IncomingPayload): Promise<Next
             timestamp: timestampLbl,
             channel: 'whatsapp',
             status: 'read',
-            createdAt: receivedAt,
           },
-          $set: {...updateFields, ...(text ? {text}: {}), ...(interactive ? { interactive }: {})},
+          $set: {
+            ...updateFields,
+            ...(text ? { text } : {}),
+            ...(interactive ? { interactive } : {}),
+          },
         },
         { upsert: true }
       );
