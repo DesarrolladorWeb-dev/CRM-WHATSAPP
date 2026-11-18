@@ -23,6 +23,14 @@ export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
     const conversationId = searchParams.get("conversationId");
+    // Paginacion por conversacion: la ultima pagina (50 por defecto) y un
+    // cursor `before` (createdAt ISO del mensaje mas antiguo ya cargado).
+    const before = searchParams.get("before");
+    const limitRaw = Number(searchParams.get("limit"));
+    const limit =
+      Number.isFinite(limitRaw) && limitRaw > 0
+        ? Math.min(Math.floor(limitRaw), 200)
+        : 50;
 
     const db = await connectToDatabase().catch(() => null);
     if (!db || !isDbConnected()) {
@@ -44,20 +52,44 @@ export async function GET(req: NextRequest) {
     }
 
     if (conversationId) {
-      const messages = await MessageModel.find({ conversationId })
-        .sort({ createdAt: 1 })
+      const filtro: Record<string, unknown> = { conversationId };
+      if (before) {
+        const fecha = new Date(before);
+        if (!Number.isNaN(fecha.getTime())) {
+          filtro.createdAt = { $lt: fecha };
+        }
+      }
+
+      // Se ordena de mas nuevo a mas antiguo para que el indice
+      // { conversationId: 1, createdAt: 1 } recorra solo la cola de la
+      // conversacion (sin traerse el historial entero) y se invierte en
+      // memoria para devolverlo en orden cronologico, como espera el inbox.
+      // El +1 es la sonda que dice si quedan mas paginas.
+      const page = await MessageModel.find(filtro)
+        .sort({ createdAt: -1 })
+        .limit(limit + 1)
         .lean();
-      if ((!messages || messages.length === 0) && DEMO_MODE) {
+
+      const hasMore = page.length > limit;
+      const messages = (hasMore ? page.slice(0, limit) : page).reverse();
+
+      if (messages.length === 0 && !before && DEMO_MODE) {
         return NextResponse.json({
           success: true,
           source: "demo",
           data: INITIAL_MESSAGES[conversationId] || [],
+          hasMore: false,
+          nextCursor: null,
         });
       }
       return NextResponse.json({
         success: true,
         source: "mongodb",
         data: messages,
+        hasMore,
+        // Cursor para pedir la pagina anterior: el createdAt del mensaje mas
+        // antiguo de esta pagina.
+        nextCursor: messages.length > 0 ? messages[0].createdAt : null,
       });
     }
 

@@ -69,5 +69,9 @@ const MessageSchema: Schema = new Schema(
   { timestamps: true }
 );
 
+// Paginacion del historial por conversacion: cubre el filtro por
+// conversationId y el orden/`before` por createdAt en una sola pasada.
+MessageSchema.index({ conversationId: 1, createdAt: 1 });
+
 export const MessageModel: Model<IMessage> =
   mongoose.models.Message || mongoose.model<IMessage>('Message', MessageSchema);

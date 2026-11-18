@@ -76,6 +76,29 @@ function getMediaLabel(mediaType?: string): string {
 // servidor/hidratación (false) de cliente ya montado (true).
 const subscribeNoop = () => () => { };
 
+/**
+ * Contacto mínimo para que una conversación de la base siga siendo visible
+ * cuando /api/contacts falla. Sin esto el chat desaparecía hasta refrescar.
+ */
+function contactoPlaceholder(conv: Conversation): Contact {
+  return {
+    id: conv.contactId,
+    name: 'Contacto WhatsApp',
+    avatar: avatarPara(conv.contactId, false),
+    handle: '',
+    phone: '',
+    channel: conv.channel,
+    tags: [],
+    sentiment: 'neutral',
+    leadScore: 0,
+    stage: 'lead',
+    dealValue: 0,
+    notes: '',
+    lastActive: 'Ahora',
+    company: '',
+  };
+}
+
 export default function HomePage() {
   const router = useRouter()
   const pathname = usePathname()
@@ -227,7 +250,7 @@ export default function HomePage() {
     }
   }
 
-  // Client-side hydration and DB sync
+  // Client-side hydration
   useEffect(() => {
 
     const checkUser = async () => {
@@ -256,101 +279,154 @@ export default function HomePage() {
     }
 
     checkUser()
+  }, []);
 
-    // Try fetching live data from MongoDB API endpoints
+  // Datos de la base (Postgres + Mongo). Depende de `currentUser` a proposito:
+  // antes corria una sola vez al montar, mientras la sesion aun no estaba
+  // resuelta, asi que las peticiones podian volver 401 y el inbox se quedaba
+  // con los mocks hasta refrescar la pagina. Con la sesion como dependencia se
+  // ejecuta solo con sesion y se repite al hacer login.
+  useEffect(() => {
+    if (!currentUser) return;
+    let cancelled = false;
+
+    // Cada endpoint se resuelve por separado: un `.json()` que falle en UNA
+    // respuesta devuelve null y no aborta el resto, y los 5xx / fallos de red
+    // se reintentan con backoff (500 ms, 1 s).
+    type DbBody = { success?: boolean; data?: unknown; error?: string } | null;
+    const getJson = async (url: string): Promise<{ ok: boolean; status: number; body: DbBody }> => {
+      const maxIntentos = 3;
+      let status = 0;
+      for (let intento = 0; intento < maxIntentos; intento++) {
+        if (cancelled) return { ok: false, status, body: null };
+        try {
+          const res = await apiFetch(url);
+          const body = await res.json().catch(() => null);
+          // Un 4xx es definitivo (sin sesion, sin permisos...): reintentarlo
+          // solo retrasa el resto de peticiones.
+          if (res.ok || res.status < 500) return { ok: res.ok, status: res.status, body };
+          status = res.status;
+        } catch {
+          status = 0;
+        }
+        if (intento < maxIntentos - 1) {
+          await new Promise(resolve => setTimeout(resolve, 500 * 2 ** intento));
+        }
+      }
+      return { ok: false, status, body: null };
+    };
+
     const fetchDbData = async () => {
-      try {
-        const [cRes, convRes, segRes, campRes, autoRes, analyticsRes, meRes, qrRes] = await Promise.all([
-          apiFetch('/api/contacts'),
-          apiFetch('/api/conversations'),
-          apiFetch('/api/segments'),
-          apiFetch('/api/campaigns'),
-          apiFetch('/api/automations'),
-          apiFetch('/api/analytics'),
-          apiFetch('/api/auth/me'),
-          apiFetch('/api/quick-replies'),
-        ]);
+      const [cRes, convRes, segRes, campRes, autoRes, analyticsRes, meRes, qrRes] = await Promise.all([
+        getJson('/api/contacts'),
+        getJson('/api/conversations'),
+        getJson('/api/segments'),
+        getJson('/api/campaigns'),
+        getJson('/api/automations'),
+        getJson('/api/analytics'),
+        getJson('/api/auth/me'),
+        getJson('/api/quick-replies'),
+      ]);
+      if (cancelled) return;
 
-        const dataDown = [cRes, convRes, segRes, campRes, autoRes, analyticsRes].some(r => r.status >= 500);
-        if (dataDown) setDbDegraded(true);
+      const dataDown = [cRes, convRes, segRes, campRes, autoRes, analyticsRes]
+        .some(r => r.status >= 500 || r.status === 0);
+      if (dataDown) setDbDegraded(true);
 
-        // Este efecto solo corre al montar: el estado de contactos aún es el inicial.
-        let latestContacts = INITIAL_CONTACTS;
-        if (cRes.ok) {
-          const cData = await cRes.json();
-          if (cData.success && Array.isArray(cData.data) && cData.data.length > 0) {
-            latestContacts = cData.data;
-            setContacts(cData.data);
-          }
+      let latestContacts: Contact[] | null = null;
+      if (cRes.ok) {
+        const cData = cRes.body;
+        if (cData?.success && Array.isArray(cData.data) && cData.data.length > 0) {
+          latestContacts = cData.data as Contact[];
+          setContacts(latestContacts);
         }
-        if (convRes.ok) {
-          const convData = await convRes.json();
-          if (convData.success && Array.isArray(convData.data) && convData.data.length > 0) {
+      }
+      if (convRes.ok) {
+        const convData = convRes.body;
+        if (convData?.success && Array.isArray(convData.data) && convData.data.length > 0) {
 
-            const contactById = new Map(latestContacts.map(c => [c.id, c]));
-            const hydrated = convData.data
-              .map((conv: Conversation) => ({ ...conv, contact: conv.contact || contactById.get(conv.contactId) }))
-              .filter((conv: Conversation) => !!conv.contact);
-            if (hydrated.length > 0) {
-              setConversations(hydrated);
-              // Sin ?id= en la URL nadie elegía conversación y el panel mostraba
-              // los mocks hasta el primer clic: se abre la más reciente.
-              if (!searchParams.get('id')) {
-                setActiveConversationId(hydrated[0].id);
-                const params = new URLSearchParams(searchParams.toString());
-                params.set('id', hydrated[0].id);
-                router.replace(`${pathname}?${params.toString()}`);
-              }
+          // Si /api/contacts fallo, `latestContacts` es null: NO se descartan
+          // las conversaciones por no poder enlazar su contacto. Se reutiliza
+          // el contacto que ya tuvieramos en memoria y, si tampoco, uno mínimo.
+          const contactById = new Map<string, Contact>(
+            [...INITIAL_CONTACTS, ...(latestContacts ?? [])].map(c => [c.id, c])
+          );
+          const contactosPrevios = new Map(
+            conversationsRef.current.map(c => [c.id, c.contact])
+          );
+          const hydrated = (convData.data as Conversation[])
+            .map((conv: Conversation) => ({
+              ...conv,
+              contact:
+                conv.contact ||
+                contactById.get(conv.contactId) ||
+                contactosPrevios.get(conv.id) ||
+                contactoPlaceholder(conv),
+            }));
+          if (hydrated.length > 0) {
+            setConversations(hydrated);
+            // Sin ?id= en la URL nadie elegía conversación y el panel mostraba
+            // los mocks hasta el primer clic: se abre la más reciente.
+            if (!searchParams.get('id')) {
+              setActiveConversationId(hydrated[0].id);
+              const params = new URLSearchParams(searchParams.toString());
+              params.set('id', hydrated[0].id);
+              router.replace(`${pathname}?${params.toString()}`);
             }
           }
         }
-        if (segRes.ok) {
-          const segData = await segRes.json();
-          if (segData.success && Array.isArray(segData.data) && segData.data.length > 0) {
-            setSegments(segData.data);
-          }
+      }
+      if (segRes.ok) {
+        const segData = segRes.body;
+        if (segData?.success && Array.isArray(segData.data) && segData.data.length > 0) {
+          setSegments(segData.data);
         }
-        if (campRes.ok) {
-          const campData = await campRes.json();
-          if (campData.success && Array.isArray(campData.data) && campData.data.length > 0) {
-            setCampaigns(campData.data);
-          }
+      }
+      if (campRes.ok) {
+        const campData = campRes.body;
+        if (campData?.success && Array.isArray(campData.data) && campData.data.length > 0) {
+          setCampaigns(campData.data);
         }
-        if (autoRes.ok) {
-          const autoData = await autoRes.json();
-          if (autoData.success && Array.isArray(autoData.data) && autoData.data.length > 0) {
-            setAutomations(autoData.data);
-          }
+      }
+      if (autoRes.ok) {
+        const autoData = autoRes.body;
+        if (autoData?.success && Array.isArray(autoData.data) && autoData.data.length > 0) {
+          setAutomations(autoData.data);
         }
-        if (analyticsRes.ok) {
-          const analyticsData = await analyticsRes.json();
-          if (analyticsData.success && analyticsData.data) {
-            setAnalyticsData(analyticsData.data);
-          }
+      }
+      if (analyticsRes.ok) {
+        const analyticsData = analyticsRes.body;
+        if (analyticsData?.success && analyticsData.data) {
+          setAnalyticsData(analyticsData.data as AnalyticsData);
         }
-        if (meRes.ok) {
-          const meData = await meRes.json();
-          // Solo ocultamos el boton si el backend dice explicitamente que NO.
-          if (meData.success) {
-            if (meData.data?.capabilities?.campaigns) {
-              setCanDeleteCampaigns(!!meData.data.capabilities.campaigns.delete);
-            }
-            setCanDeleteContacts(!!meData.data?.capabilities?.contacts?.delete);
+      }
+      if (meRes.ok) {
+        const meData = meRes.body as {
+          success?: boolean;
+          data?: { capabilities?: { campaigns?: { delete?: boolean }; contacts?: { delete?: boolean } } };
+        } | null;
+        // Solo ocultamos el boton si el backend dice explicitamente que NO.
+        if (meData?.success) {
+          if (meData.data?.capabilities?.campaigns) {
+            setCanDeleteCampaigns(!!meData.data.capabilities.campaigns.delete);
           }
+          setCanDeleteContacts(!!meData.data?.capabilities?.contacts?.delete);
         }
-        if (qrRes.ok) {
-          const qrData = await qrRes.json();
+      }
+      if (qrRes.ok) {
+        const qrData = qrRes.body;
 
-          if (qrData.success && Array.isArray(qrData.data) && qrData.data.length > 0) {
-            setQuickReplies(qrData.data);
-          }
+        if (qrData?.success && Array.isArray(qrData.data) && qrData.data.length > 0) {
+          setQuickReplies(qrData.data);
         }
-      } catch {
-        setDbDegraded(true);
       }
     };
     fetchDbData();
-  }, []);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [currentUser]);
 
   useEffect(() => {
     if (!mounted
@@ -399,10 +475,9 @@ export default function HomePage() {
     };
   }, [activeConversationId, mounted]);
 
-  const isWhatsappServiceActive = isWhatsappSocketConnected;
-  const visibleConversations = isWhatsappServiceActive
-    ? conversations
-    : conversations.filter(c => c.channel !== 'whatsapp');
+  // Las conversaciones de la base se muestran siempre: que el socket no este
+  // conectado solo afecta al tiempo real, no a lo que ya hay guardado.
+  const visibleConversations = conversations;
 
   const unreadTotal = visibleConversations.reduce((acc, c) => acc + (c.unreadCount || 0), 0);
   // Handle Send Message
@@ -649,12 +724,12 @@ export default function HomePage() {
   }
 
   const handleIncomingWhatsAppMessage = async (raw: ReceivedWhatsAppMessage) => {
-    console.log('RAW INCOMING: ', JSON.stringify(raw, null, 2))
     if (!raw || typeof raw !== 'object') return;
 
     const messageId = String(raw.messageId || `m_inc_${Date.now()}`);
+    // No se marca aqui: solo cuenta como procesado cuando el POST confirma que
+    // el mensaje quedo guardado. Si falla, el siguiente ciclo lo reintenta.
     if (processedIncomingIdsRef.current.has(messageId)) return;
-    processedIncomingIdsRef.current.add(messageId);
 
 
     const from = String(raw.from || '')
@@ -725,8 +800,19 @@ export default function HomePage() {
         }),
       });
       if (res.ok) {
-        const payload = await res.json();
-        if (payload.success && payload.data) saved = payload.data;
+        const payload = await res.json().catch(() => null);
+        if (payload?.success && payload.data) {
+          saved = payload.data;
+          // Idempotencia: el id solo se da por procesado cuando el servidor
+          // confirmo el guardado. Antes se marcaba al entrar, asi que un POST
+          // fallido (503, red caida...) dejaba el mensaje sin guardar para
+          // siempre hasta recargar.
+          processedIncomingIdsRef.current.add(messageId);
+        } else {
+          setWhatsappError(
+            String(payload?.error || 'WhatsApp no pudo guardar el mensaje entrante.')
+          );
+        }
       } else {
         const payload = await res.json().catch(() => null);
         const detalle =
@@ -984,7 +1070,11 @@ export default function HomePage() {
 
     const socket = createSocket(WHATSAPP_SERVICE_URL, {
       transports: ['websocket', 'polling'],
-      reconnectionAttempts: 5,
+      // El servicio se reinicia a menudo (y la red del cliente parpadea): se
+      // reintenta sin limite, con techo de 10 s, en vez de rendirse a los 5
+      // intentos y dejar el inbox "congelado" hasta refrescar.
+      reconnectionAttempts: Infinity,
+      reconnectionDelayMax: 10000,
       timeout: 5000,
       auth: (callback) => {
         fetch('/api/wa-socket-token', { cache: 'no-store' })
@@ -994,6 +1084,18 @@ export default function HomePage() {
       }
     });
     whatsappSocketRef.current = socket;
+
+    // Socket.IO deja de reintentar por su cuenta cuando el fallo es definitivo
+    // (p. ej. el handshake rechaza el token). En ese caso `socket.active` es
+    // false y hay que reabrir el canal a mano.
+    let reconnectTimer: number | null = null;
+    const reconnectLater = () => {
+      if (socket.active || reconnectTimer !== null) return;
+      reconnectTimer = window.setTimeout(() => {
+        reconnectTimer = null;
+        if (!socket.connected) socket.connect();
+      }, 3000);
+    };
 
     socket.on('connect', () => {
       setIsWhatsappSocketConnected(true);
@@ -1016,8 +1118,15 @@ export default function HomePage() {
     socket.on('outgoing-message', (msg: { messageId?: string; jid?: string; text?: string; senderName?: string; timestamp?: string }) => {
       outgoingHandlerRef.current(msg);
     });
-    socket.on('disconnect', () => {
+    socket.on('disconnect', (reason) => {
       setIsWhatsappSocketConnected(false);
+      // 'io server disconnect' es el unico caso en el que el cliente NO
+      // reconecta solo: el servidor cerro el canal a proposito.
+      if (reason === 'io server disconnect') reconnectLater();
+    });
+    socket.on('connect_error', () => {
+      setIsWhatsappSocketConnected(false);
+      reconnectLater();
     });
 
     // Estado inicial + historial reciente cuando el CRM arranca.
@@ -1026,10 +1135,17 @@ export default function HomePage() {
         setWhatsappStatus(st.data);
       }
     });
+    // Al cargar la pagina los mensajes recientes que devuelve el servicio ya
+    // estan en la base (los guardo el webhook, que se registra en cada
+    // conexion). Reenviarlos a /api/whatsapp/incoming solo reabriria
+    // conversaciones ya leidas y volveria a sumar no leidos: se marcan como
+    // procesados para que el ciclo de sincronizacion no los repita.
     getReceivedMessages(50).then(res => {
-      if (res.ok && Array.isArray(res.data.messages)) {
-        res.data.messages.forEach(m => incomingHandlerRef.current(m));
-      }
+      if (!res.ok || !Array.isArray(res.data.messages)) return;
+      res.data.messages.forEach(m => {
+        const id = String(m.messageId || '');
+        if (id) processedIncomingIdsRef.current.add(id);
+      });
     });
 
     // Reconciliación de respaldo: Socket.IO es realtime, pero una caída del
@@ -1047,6 +1163,7 @@ export default function HomePage() {
 
     return () => {
       window.clearInterval(receivedSyncInterval);
+      if (reconnectTimer !== null) window.clearTimeout(reconnectTimer);
       socket.disconnect();
       whatsappSocketRef.current = null;
       setIsWhatsappSocketConnected(false);
@@ -1767,6 +1884,22 @@ export default function HomePage() {
             >
               x
             </button>
+          </div>
+        </div>
+      )}
+
+
+      {/* Aviso: sin socket con el servicio de WhatsApp. Los chats siguen
+          visibles porque vienen de la base; solo se pierde el tiempo real. */}
+      {!isWhatsappSocketConnected && (
+        <div className="fixed top-0 inset-x-0 z-205 bg-slate-800 text-white shadow-md" role="status">
+          <div className="mx-auto flex max-w-5xl items-center gap-3 px-4 py-2 text-xs sm:text-sm">
+            <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white text-slate-800 font-bold">
+              !
+            </span>
+            <p className="flex-1 font-semibold">
+              WhatsApp desconectado. Los chats se muestran desde la base de datos; los mensajes nuevos pueden tardar en aparecer.
+            </p>
           </div>
         </div>
       )}

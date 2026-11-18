@@ -369,13 +369,7 @@ export async function handleIncomingPayload(body: IncomingPayload): Promise<Next
       isNewConversation = true;
     }
 
-    // 3. Actualizar el resumen de la conversacion (lastMessage + no leidos).
-    await bumpLastMessage(db, conversation.id, {
-      text: lastMsgText,
-      sender: 'contact',
-    });
-
-    // 4. Mensaje en MongoDB (upsert por id: el polling inicial y el socket
+    // 3. Mensaje en MongoDB (upsert por id: el polling inicial y el socket
     // pueden entregar el mismo messageId dos veces).
     let mongoConnected = false;
     try {
@@ -384,72 +378,96 @@ export async function handleIncomingPayload(body: IncomingPayload): Promise<Next
     } catch {
       mongoConnected = false;
     }
-    let savedMediaUrl: string | undefined;
-    if (mongoConnected) {
-      const updateFields: Record<string, unknown> = {
-        hasMedia: body.hasMedia || false,
-      };
-      
-      if (body.hasMedia && body.mediaType) {
-        updateFields.mediaType = body.mediaType;
-      }
-      
-      if (body.hasMedia && body.media) {
-        const esDataUrl = body.media.data.startsWith('data:');
-        const saved: SavedMedia | null = await saveMedia({
-          conversationId: conversation.id,
-          messageId,
-          dataUrl: esDataUrl ? body.media.data : null,
-          base64: esDataUrl ? null : body.media.data,
-          mimetype: body.media.mimetype,
-        });
 
-        if (saved) {
-          // El binario vive en disco; en Mongo solo queda la URL y los metadatos.
-          updateFields.mediaUrl = saved.url;
-          savedMediaUrl = saved.url;
-          updateFields.media = {
-            mimetype: saved.mimetype,
-            data: '',
-            size: saved.size,
-            filename: body.media.filename,
-            width: body.media.width,
-            height: body.media.height,
-          };
-        } else {
-          // Sin disco disponible: se conserva el base64 inline (legacy).
-          updateFields.media = {
-            mimetype: body.media.mimetype,
-            data: body.media.data,
-            size: body.media.size,
-            filename: body.media.filename,
-            width: body.media.width,
-            height: body.media.height,
-          };
-        }
-      }
-
-      await MessageModel.updateOne(
-        { id: messageId },
+    // Sin Mongo el mensaje no queda guardado. Responder `success: true` hacia
+    // que el cliente lo diera por persistido y no lo reintentara nunca.
+    if (!mongoConnected) {
+      logger.error('MongoDB no disponible: mensaje entrante no guardado', { messageId });
+      return NextResponse.json(
         {
-          $setOnInsert: {
-            id: messageId,
-            conversationId: conversation.id,
-            sender: 'contact',
-            senderName: name,
-            // text,
-            timestamp: timestampLbl,
-            channel: 'whatsapp',
-            status: 'read',
-          },
-          $set: {
-            ...updateFields,
-            ...(text ? { text } : {}),
-            ...(interactive ? { interactive } : {}),
-          },
+          success: false,
+          error: 'MongoDB no disponible: el mensaje entrante no se pudo guardar',
         },
-        { upsert: true }
+        { status: 503 }
       );
+    }
+
+    let savedMediaUrl: string | undefined;
+    const updateFields: Record<string, unknown> = {
+      hasMedia: body.hasMedia || false,
+    };
+
+    if (body.hasMedia && body.mediaType) {
+      updateFields.mediaType = body.mediaType;
+    }
+
+    if (body.hasMedia && body.media) {
+      const esDataUrl = body.media.data.startsWith('data:');
+      const saved: SavedMedia | null = await saveMedia({
+        conversationId: conversation.id,
+        messageId,
+        dataUrl: esDataUrl ? body.media.data : null,
+        base64: esDataUrl ? null : body.media.data,
+        mimetype: body.media.mimetype,
+      });
+
+      if (saved) {
+        // El binario vive en disco; en Mongo solo queda la URL y los metadatos.
+        updateFields.mediaUrl = saved.url;
+        savedMediaUrl = saved.url;
+        updateFields.media = {
+          mimetype: saved.mimetype,
+          data: '',
+          size: saved.size,
+          filename: body.media.filename,
+          width: body.media.width,
+          height: body.media.height,
+        };
+      } else {
+        // Sin disco disponible: se conserva el base64 inline (legacy).
+        updateFields.media = {
+          mimetype: body.media.mimetype,
+          data: body.media.data,
+          size: body.media.size,
+          filename: body.media.filename,
+          width: body.media.width,
+          height: body.media.height,
+        };
+      }
+    }
+
+    const upsertResult = await MessageModel.updateOne(
+      { id: messageId },
+      {
+        $setOnInsert: {
+          id: messageId,
+          conversationId: conversation.id,
+          sender: 'contact',
+          senderName: name,
+          // text,
+          timestamp: timestampLbl,
+          channel: 'whatsapp',
+          status: 'read',
+        },
+        $set: {
+          ...updateFields,
+          ...(text ? { text } : {}),
+          ...(interactive ? { interactive } : {}),
+        },
+      },
+      { upsert: true }
+    );
+
+    // 4. Resumen de la conversacion (lastMessage + no leidos): solo cuando el
+    // upsert ha INSERTADO de verdad. El webhook y el socket pueden entregar el
+    // mismo mensaje dos veces; con bumpLastMessage incondicional cada reintento
+    // volvia a sumar un no leido y a reabrir la conversacion.
+    const insertado = upsertResult.upsertedCount === 1;
+    if (insertado) {
+      await bumpLastMessage(db, conversation.id, {
+        text: lastMsgText,
+        sender: 'contact',
+      });
     }
 
     const contactApi = contactToApi(contact);
@@ -458,7 +476,8 @@ export async function handleIncomingPayload(body: IncomingPayload): Promise<Next
       contactId: conversation.contactId,
       contact: contactApi,
       channel: 'whatsapp',
-      unreadCount: (conversation.unreadCount || 0) + 1,
+      // Un reintento del mismo mensaje no sube el contador: ya estaba contado.
+      unreadCount: (conversation.unreadCount || 0) + (insertado ? 1 : 0),
       lastMessage: lastMsgText,
       lastMessageTime: 'Ahora',
       status: conversation.status as Conversation['status'],
