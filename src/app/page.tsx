@@ -1024,7 +1024,21 @@ export default function HomePage() {
       }
     });
 
+    // Reconciliación de respaldo: Socket.IO es realtime, pero una caída del
+    // transporte o de una reconexion puede perder un evento. Consultar mensajes
+    // recientes mantiene el inbox actualizado sin obligar a refrescar la pagina.
+    // processedIncomingIds evita que el mismo mensaje se vuelva a insertar.
+    const syncReceivedMessages = () => {
+      getReceivedMessages(50).then(res => {
+        if (res.ok && Array.isArray(res.data.messages)) {
+          res.data.messages.forEach(m => incomingHandlerRef.current(m));
+        }
+      });
+    };
+    const receivedSyncInterval = window.setInterval(syncReceivedMessages, 5000);
+
     return () => {
+      window.clearInterval(receivedSyncInterval);
       socket.disconnect();
       whatsappSocketRef.current = null;
       setIsWhatsappSocketConnected(false);
