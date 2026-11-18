@@ -724,6 +724,12 @@ export default function HomePage() {
       if (res.ok) {
         const payload = await res.json();
         if (payload.success && payload.data) saved = payload.data;
+      } else {
+        const payload = await res.json().catch(() => null);
+        const detalle =
+          payload?.error ||
+          `WhatsApp no pudo guardar el mensaje entrante (${res.status}).`;
+        setWhatsappError(String(detalle));
       }
     } catch {
       saved = undefined;

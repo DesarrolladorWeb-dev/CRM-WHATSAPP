@@ -12,7 +12,7 @@ import { DEMO_MODE, dbUnavailableResponse } from '@/lib/demo';
 import { captureException, logger, motivo } from '@/lib/logger';
 import { saveMedia, type SavedMedia } from '@/lib/mediaStorage';
 import type { Contact, Conversation } from '@/types';
-import { requireUserPermission } from '@/lib/auth';
+import { requireWriteAccess } from '@/lib/auth';
 import { formatTimeFromIso } from '@/lib/time';
 import { interactiveToText, parseInteractive } from '@/lib/whatsappInteractive';
 
@@ -165,17 +165,20 @@ function contactToApi(row: {
 
 /** Valida la credencial del navegador (x-api-key con write) o del webhook (?secret=). */
 export async function authorizeIncoming(req: NextRequest): Promise<NextResponse | null> {
-  const denied = await requireUserPermission(req, 'write');
+  const denied = await requireWriteAccess(req, 'write');
   if (!denied) return null;
 
   const secret = process.env.WHATSAPP_WEBHOOK_SECRET;
   if (secret) {
-    const provided = new URL(req.url).searchParams.get('secret') || '';
-    
+    const provided =
+      req.headers.get('x-n8n-secret') ||
+      new URL(req.url).searchParams.get('secret') ||
+      '';
+
     // Comparar usando hashes para evitar timing attacks y problemas de longitud
     const providedHash = createHash('sha256').update(provided).digest();
     const secretHash = createHash('sha256').update(secret).digest();
-    
+
     if (timingSafeEqual(providedHash, secretHash)) return null;
   }
   return denied;

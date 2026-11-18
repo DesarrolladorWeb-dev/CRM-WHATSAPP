@@ -43,6 +43,7 @@ export function extractApiKey(req: NextRequest): string | null {
  */
 const MACHINE_PATHS = [
   '/api/whatsapp/webhook',
+  '/api/whatsapp/incoming',
   '/api/whatsapp/send-media',
   '/api/messages',
 ];
