@@ -632,10 +632,27 @@ export default function HomePage() {
         phone,
         type: 'image',
         media: mediaUrl,
+        conversationId,
         filename,
         mimetype,
         });
         resultado = resultadoImagen;
+
+        if (resultadoImagen.ok) {
+          const mensaje = enviarImagenYTexto ? imageMsg : newMsg;
+          const idGuardado = resultadoImagen.data.historyMessageId;
+          if (idGuardado) {
+            setMessagesMap(prev => ({
+              ...prev,
+              [conversationId]: mergeMessagesChronologically([
+                { ...mensaje, id: idGuardado },
+                ...(prev[conversationId] || []).filter(msg => msg.id !== mensaje.id),
+              ]),
+            }));
+          } else {
+            setWhatsappError('La imagen se envió por WhatsApp, pero no se pudo guardar en el historial del CRM.');
+          }
+        }
 
         if (!resultadoImagen.ok) {
           mensajeFallidoId = enviarImagenYTexto ? imageMsg.id : newMsg.id;
@@ -718,7 +735,7 @@ export default function HomePage() {
       }
     }
 
-    // La ruta de envío registra el documento y devuelve el ID guardado en Mongo.
+    // La ruta de envío guarda la imagen o el documento. El texto va aparte.
     const mediaPersistedBySendRoute = esDocumentoWhatsApp || (conv.channel === 'whatsapp' && esImagenAdjunta);
     const messagesToPersist = mediaPersistedBySendRoute
       ? enviarImagenYTexto && textoImagenWhatsAppEnviado

@@ -69,6 +69,8 @@ export async function POST(req: NextRequest) {
     const conversationIdDelChat =
       typeof conversationId === 'string' ? conversationId.trim() : '';
     const guardarSoloMetadatos = type === 'document' && !!conversationIdDelChat;
+    const guardarImagenDelChat = type === 'image' && !!conversationIdDelChat;
+    const confirmaHistorial = guardarSoloMetadatos || guardarImagenDelChat;
     // null indica que WhatsApp confirmó el envío, pero falta el registro en Mongo.
     let historyMessageId: string | null = null;
 
@@ -135,21 +137,26 @@ export async function POST(req: NextRequest) {
               mimetype,
             })
           : null;
+        const mediaUrl = saved?.url || (guardarBinario && esUrlRemota ? media : undefined);
+        if (guardarImagenDelChat && !mediaUrl) {
+          logger.error('whatsapp.send-media.history_error', { msgId, motivo: 'No se pudo guardar la imagen' });
+          return NextResponse.json({ success: true, data: result.data, historyMessageId });
+        }
 
         const mensajeGuardado = await MessageModel.create({
           id: msgId,
           conversationId: targetConversationId,
           sender: 'agent',
-          senderName: guardarSoloMetadatos ? 'Asistente XIO' : 'Agente',
+          senderName: confirmaHistorial ? 'Asistente XIO' : 'Agente',
           text: type === 'document' ? (caption || '') : (caption || (type === 'image' ? '' : `[${type.charAt(0).toUpperCase() + type.slice(1)} enviado]`)),
-          timestamp: guardarSoloMetadatos
+          timestamp: confirmaHistorial
             ? formatTime()
             : new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
           channel: 'whatsapp',
           status: 'sent',
           hasMedia: true,
           mediaType: type,
-          mediaUrl: saved?.url || (guardarBinario && esUrlRemota ? media : undefined),
+          mediaUrl,
           media: {
             mimetype: saved?.mimetype || mimetype || 'application/octet-stream',
             data: '',
@@ -157,11 +164,11 @@ export async function POST(req: NextRequest) {
             filename: filename,
           },
         }).catch((error: unknown) => {
-          if (!guardarSoloMetadatos) throw error;
+          if (!confirmaHistorial) throw error;
           logger.error('whatsapp.send-media.history_error', { msgId, motivo: motivo(error) });
           return null;
         });
-        if (guardarSoloMetadatos && mensajeGuardado) {
+        if (confirmaHistorial && mensajeGuardado) {
           historyMessageId = mensajeGuardado.id;
         }
       }
@@ -170,7 +177,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       success: true,
       data: result.data,
-      ...(guardarSoloMetadatos ? { historyMessageId } : {}),
+      ...(confirmaHistorial ? { historyMessageId } : {}),
     });
   } catch (error) {
     logger.error('whatsapp.send-media.exception', { motivo: motivo(error) });

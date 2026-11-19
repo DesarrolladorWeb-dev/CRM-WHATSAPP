@@ -322,8 +322,9 @@ export function sendMediaMessage(
 ): Promise<AsService<SendMediaResult>> {
   const jidToSend = getJidForSending(opts.phone);
   const path = '/api/whatsapp/send-media';
-  // Los documentos del chat pasan por el CRM para registrar el envío en Mongo.
-  const browserPath = opts.type === 'document' && opts.conversationId ? path : undefined;
+  // Los adjuntos que el CRM guarda al enviar requieren la conversación.
+  const guardaHistorial = opts.type === 'image' || opts.type === 'document';
+  const browserPath = guardaHistorial && opts.conversationId ? path : undefined;
 
   return unwrap(
     request<SendMediaResult>(path, {
