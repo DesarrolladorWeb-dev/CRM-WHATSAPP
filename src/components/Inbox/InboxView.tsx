@@ -25,6 +25,7 @@ import { AppRouterInstance } from 'next/dist/shared/lib/app-router-context.share
 import { ReadonlyURLSearchParams } from 'next/navigation';
 import { AI_MODEL_NAME } from '@/lib/constants';
 import { formatPhoneDisplay } from '@/lib/whatsappService';
+import { formatTime, formatWallClock } from '@/lib/time';
 import { WhatsAppIcon, XBrandIcon, MessengerIcon } from '@/components/Icons/ChannelIcons';
 import { Button, Modal } from '../ui';
 import { InteractiveButtons } from './InteractiveButtons';
@@ -78,6 +79,45 @@ function isImageMessage(msg: Message): boolean {
   const src = getMessageMediaSrc(msg)
   if (!src || !(msg.hasMedia || msg.mediaUrl)) return false
   return msg.mediaType === 'image' || (!msg.mediaType && !!msg.mediaUrl && !src.startsWith('data:audio/'))
+}
+
+/**
+ * Etiqueta de hora de la lista de chats, calculada en la zona del negocio
+ * (America/Lima) y no en la del navegador:
+ *
+ *   - Hoy            -> "14:05"
+ *   - Ayer           -> "Ayer"
+ *   - Mismo año      -> "24/09"
+ *   - Otro año       -> "24/09/25"
+ *
+ * Se parte de `updatedAt` (la ultima actualizacion real de la conversacion en
+ * la base). `lastMessageTime` solo se usa como respaldo cuando la conversacion
+ * todavia no tiene `updatedAt` (mocks, objetos creados en memoria), porque ese
+ * campo guardaba el literal 'Ahora' y por eso toda la lista decia "Ahora".
+ */
+function formatConversationTime(updatedAt?: string, fallback?: string): string {
+  if (!updatedAt) return fallback || '';
+
+  const fecha = new Date(updatedAt);
+  if (Number.isNaN(fecha.getTime())) return fallback || '';
+
+  // formatWallClock devuelve "YYYY-MM-DDTHH:mm" en la zona del negocio.
+  const diaDe = (d: Date) => formatWallClock(d).slice(0, 10);
+  const hoy = diaDe(new Date());
+  const dia = diaDe(fecha);
+
+  if (dia === hoy) return formatTime(fecha);
+
+  // Ayer se calcula sobre el calendario (no restando 24 h): asi no depende de
+  // la hora actual ni de que la zona tenga horario de verano.
+  const [anio, mes, diaMes] = hoy.split('-').map(Number);
+  const ayer = new Date(Date.UTC(anio, mes - 1, diaMes - 1)).toISOString().slice(0, 10);
+  if (dia === ayer) return 'Ayer';
+
+  const [anioMensaje, mesMensaje, diaMensaje] = dia.split('-');
+  return anioMensaje === hoy.slice(0, 4)
+    ? `${diaMensaje}/${mesMensaje}`
+    : `${diaMensaje}/${mesMensaje}/${anioMensaje.slice(2)}`;
 }
 
 function renderTextWithLinks(text: string) {
@@ -286,6 +326,12 @@ export const InboxView: React.FC<InboxViewProps> = ({
   const [showAttachInput, setShowAttachInput] = useState<boolean>(false);
   // Id de la imagen abierta en el visor (null = cerrado).
   const [lightboxImageId, setLightboxImageId] = useState<string | null>(null);
+  // Medios que no cargaron (archivo borrado, URL caida, 404): se sustituyen
+  // por un recuadro con "Archivo no disponible" en vez de dejar el icono roto.
+  // La clave lleva el tipo porque un mismo mensaje podria renderizar varios.
+  const [failedMedia, setFailedMedia] = useState<Record<string, boolean>>({});
+  const markMediaFailed = (key: string) =>
+    setFailedMedia(prev => (prev[key] ? prev : { ...prev, [key]: true }));
 
   const [showExtensionPanel, setShowExtensionPanel] = useState<boolean>(true);
   const [openPanelSections, setOpenPanelSections] = useState<Record<string, boolean>>({
@@ -934,7 +980,7 @@ export const InboxView: React.FC<InboxViewProps> = ({
                         {conv.contact.name}
                       </h4>
                       <span className="text-[10px] text-slate-400 font-semibold shrink-0">
-                        {conv.lastMessageTime}
+                        {formatConversationTime(conv.updatedAt, conv.lastMessageTime)}
                       </span>
                     </div>
 
@@ -1195,20 +1241,27 @@ export const InboxView: React.FC<InboxViewProps> = ({
                         <>
                           {(msg.mediaType === 'image' || (!msg.mediaType && msg.mediaUrl && !msg.mediaUrl.startsWith('data:audio/'))) && (
                             <div className="mb-2 rounded-xl overflow-hidden border border-black/10 bg-black/5 shadow-2xs">
-                              {/* Se abre en el visor superpuesto, como en WhatsApp Web. */}
-                              <button
-                                type="button"
-                                onClick={() => setLightboxImageId(msg.id)}
-                                aria-label={`Ampliar imagen${msg.media?.filename ? `: ${msg.media.filename}` : ''}`}
-                                title="Ver imagen completa"
-                                className="block w-full cursor-zoom-in focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/60"
-                              >
-                                <img
-                                  src={mediaSrc}
-                                  alt={msg.media?.filename || "Imagen"}
-                                  className="w-full max-h-60 object-cover hover:opacity-95 transition-opacity"
-                                />
-                              </button>
+                              {failedMedia[`${msg.id}:image`] ? (
+                                <div className="w-full h-40 flex items-center justify-center px-4 text-center text-[11px] font-semibold text-slate-500 dark:text-slate-300 bg-slate-100 dark:bg-slate-700">
+                                  Archivo no disponible
+                                </div>
+                              ) : (
+                                /* Se abre en el visor superpuesto, como en WhatsApp Web. */
+                                <button
+                                  type="button"
+                                  onClick={() => setLightboxImageId(msg.id)}
+                                  aria-label={`Ampliar imagen${msg.media?.filename ? `: ${msg.media.filename}` : ''}`}
+                                  title="Ver imagen completa"
+                                  className="block w-full cursor-zoom-in focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/60"
+                                >
+                                  <img
+                                    src={mediaSrc}
+                                    alt={msg.media?.filename || "Imagen"}
+                                    className="w-full max-h-60 object-cover hover:opacity-95 transition-opacity"
+                                    onError={() => markMediaFailed(`${msg.id}:image`)}
+                                  />
+                                </button>
+                              )}
                             </div>
                           )}
                           {msg.mediaType === 'video' && (
@@ -1249,11 +1302,18 @@ export const InboxView: React.FC<InboxViewProps> = ({
                           )}
                           {msg.mediaType === 'sticker' && (
                             <div className="mb-2">
-                              <img
-                                src={mediaSrc}
-                                alt="Sticker"
-                                className="w-32 h-32 object-contain"
-                              />
+                              {failedMedia[`${msg.id}:sticker`] ? (
+                                <div className="w-32 h-32 flex items-center justify-center px-2 text-center rounded-xl bg-slate-100 dark:bg-slate-700 text-[10px] font-semibold text-slate-500 dark:text-slate-300">
+                                  Archivo no disponible
+                                </div>
+                              ) : (
+                                <img
+                                  src={mediaSrc}
+                                  alt="Sticker"
+                                  className="w-32 h-32 object-contain"
+                                  onError={() => markMediaFailed(`${msg.id}:sticker`)}
+                                />
+                              )}
                             </div>
                           )}
                         </>

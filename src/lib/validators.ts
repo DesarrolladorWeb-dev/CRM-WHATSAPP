@@ -7,6 +7,10 @@ export const messageSchema = z.object({
   senderName: z.string().max(80).optional(),
   text: z.string().max(5000, 'texto excede 5000 caracteres').optional(),
   timestamp: z.string().max(40).optional(),
+  // Instante real del evento en ISO 8601. Sin esto, Mongoose usaba la hora de
+  // insercion y un mensaje que llegaba tarde aparecia al final del chat al
+  // recargar. La ruta comprueba que sea una fecha valida antes de guardarla.
+  createdAt: z.string().max(40).optional(),
   channel: z.enum(['whatsapp', 'instagram', 'twitter', 'messenger', 'email']).optional(),
   status: z.enum(['sent', 'delivered', 'read', 'failed']).optional(),
   hasMedia: z.boolean().optional(),

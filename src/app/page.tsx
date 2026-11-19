@@ -547,7 +547,10 @@ export default function HomePage() {
                 ? `📷 ${text || 'Imagen adjunta'}`
                 : text,
           lastMessageTime: 'Ahora',
-          unreadCount: 0
+          unreadCount: 0,
+          // La lista etiqueta cada chat con su ultima actividad real, asi que
+          // el objeto en memoria debe reflejarla igual que la base.
+          updatedAt: new Date().toISOString()
         };
       }
       return c;
@@ -948,7 +951,9 @@ export default function HomePage() {
           ...c,
           lastMessage: lastMessageDisplay,
           lastMessageTime: saved ? 'Ahora' : timestampLbl,
-          unreadCount: estaAbierta ? 0 : (c.unreadCount || 0) + 1
+          unreadCount: estaAbierta ? 0 : (c.unreadCount || 0) + 1,
+          // Refresca la etiqueta de la lista sin esperar a recargar.
+          updatedAt: new Date().toISOString()
         };
       }
       return c;
@@ -1060,7 +1065,7 @@ export default function HomePage() {
     const mediaLabel = raw.hasMedia ? getMediaLabel(raw.mediaType) : '';
     setConversations(prev => prev.map(c =>
       c.id === targetId
-        ? { ...c, lastMessage: text || mediaLabel || '[Mensaje]', lastMessageTime: 'Ahora', unreadCount: 0 }
+        ? { ...c, lastMessage: text || mediaLabel || '[Mensaje]', lastMessageTime: 'Ahora', unreadCount: 0, updatedAt: new Date().toISOString() }
         : c
     ));
   };

@@ -208,8 +208,19 @@ export async function POST(req: NextRequest) {
     const mediaType =
       parsed.data.mediaType ?? inferirMediaType(media?.mimetype || mediaUrl);
 
+    // La hora real del evento la envia quien crea el mensaje. Mongoose respeta
+    // `createdAt` si ya viene en el documento (`setDocumentTimestamps` solo lo
+    // rellena cuando falta); si no llega o no es una fecha valida, se usa la
+    // hora de insercion. Se extrae del spread porque un string invalido haria
+    // fallar el cast de Mongoose con un 500.
+    const { createdAt: createdAtEnviado, ...restoDelMensaje } = parsed.data;
+    const fechaEnviada = createdAtEnviado ? new Date(createdAtEnviado) : null;
+    const createdAt =
+      fechaEnviada && !Number.isNaN(fechaEnviada.getTime()) ? fechaEnviada : undefined;
+
     const newMsg = await MessageModel.create({
-      ...parsed.data,
+      ...restoDelMensaje,
+      ...(createdAt ? { createdAt } : {}),
       id: msgId,
       mediaUrl,
       media,

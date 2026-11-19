@@ -448,6 +448,13 @@ export async function handleIncomingPayload(body: IncomingPayload): Promise<Next
           timestamp: timestampLbl,
           channel: 'whatsapp',
           status: 'read',
+          // La fecha del mensaje es la del EVENTO, no la de insercion: hasta
+          // ahora Mongoose ponia `Date.now()` y un mensaje reprocesado tarde
+          // (buffer, webhook con retraso) aparecia al final del chat.
+          // `timestamps: false` en las opciones impide que Mongoose sustituya
+          // estos valores al construir el upsert.
+          createdAt: messageDate,
+          updatedAt: messageDate,
         },
         $set: {
           ...updateFields,
@@ -455,7 +462,7 @@ export async function handleIncomingPayload(body: IncomingPayload): Promise<Next
           ...(interactive ? { interactive } : {}),
         },
       },
-      { upsert: true }
+      { upsert: true, timestamps: false }
     );
 
     // 4. Resumen de la conversacion (lastMessage + no leidos): solo cuando el

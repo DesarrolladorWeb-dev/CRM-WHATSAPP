@@ -108,6 +108,10 @@ export interface Conversation {
   status: 'open' | 'pending' | 'resolved';
   assignedAgent: string;
   summary?: string;
+  // Ultima actualizacion de la conversacion en la base (ISO). La lista la usa
+  // para etiquetar cada chat con su hora real de actividad; `lastMessageTime`
+  // solo queda como respaldo porque historicamente guarda 'Ahora'.
+  updatedAt?: string;
 }
 
 export interface Segment {
