@@ -487,7 +487,7 @@ export default function HomePage() {
 
   const unreadTotal = visibleConversations.reduce((acc, c) => acc + (c.unreadCount || 0), 0);
   // Handle Send Message
-  const handleSendMessage = async (conversationId: string, text: string, aiGenerated: boolean = false,mediaUrl?: string, interactive?: InteractiveContent,mediaType?:'image') => {
+  const handleSendMessage = async (conversationId: string, text: string, aiGenerated: boolean = false,mediaUrl?: string, interactive?: InteractiveContent,mediaType?: Message['mediaType'], filename?: string, mimetype?: string) => {
     const timestamp = formatTime();
     const conv = conversations.find(c => c.id === conversationId);
     if (!conv) return;
@@ -504,12 +504,15 @@ export default function HomePage() {
       status: 'sent',
       aiGenerated,
       mediaUrl,
+      hasMedia: !!mediaUrl,
+      mediaType: mediaUrl ? mediaType || (mediaUrl.startsWith('data:image/') ? 'image' : undefined) : undefined,
+      media: mediaUrl && filename ? { mimetype: mimetype || 'application/octet-stream', data: '', filename } : undefined,
       interactive
     };
 
     const esImagenAdjunta =
       !!mediaUrl &&
-      (mediaType === 'image' || mediaUrl.startsWith('data:image/'));
+      ((mediaType || (mediaUrl.startsWith('data:image/') ? 'image' : undefined)) === 'image');
     const enviarImagenYTexto = esImagenAdjunta && !!text.trim();
     let textoImagenWhatsAppEnviado = false;
 
@@ -550,7 +553,9 @@ export default function HomePage() {
             : enviarImagenYTexto
               ? text.trim()
               : mediaUrl
-                ? `📷 ${text || 'Imagen adjunta'}`
+                ? mediaType === 'document'
+                  ? `📎 ${text || filename || 'Documento adjunto'}`
+                  : `📷 ${text || 'Imagen adjunta'}`
                 : text,
           lastMessageTime: 'Ahora',
           unreadCount: 0,
@@ -580,7 +585,7 @@ export default function HomePage() {
       const esAudioSimulado = !!mediaUrl && mediaUrl.startsWith('data:audio/');
       const esImagen = esImagenAdjunta;
       const esVideo = !!mediaUrl && mediaUrl.startsWith('data:video/');
-      const esDocumento = !!mediaUrl && !esAudioSimulado && !esImagen && !esVideo;
+      const esDocumento = !!mediaUrl && (mediaType === 'document' || (!esAudioSimulado && !esImagen && !esVideo));
 
       if (interactive) {
         const lid = isLid(conv.contact.handle || '') ? conv.contact.handle!.split('@')[0] : null;
@@ -619,6 +624,8 @@ export default function HomePage() {
         phone,
         type: 'image',
         media: mediaUrl,
+        filename,
+        mimetype,
         });
         resultado = resultadoImagen;
 
@@ -662,7 +669,9 @@ export default function HomePage() {
             phone,
             type: 'document',
             media: mediaUrl,
-            filename: text.trim() || 'documento',
+            filename: filename || text.trim() || 'documento',
+            mimetype,
+            caption: text.trim() || undefined,
           });
         } else {
           resultado = await sendTextMessage(phone, text.trim());
@@ -685,8 +694,9 @@ export default function HomePage() {
       }
     }
 
-    // WhatsApp's send-media route persists the image; persist the separate text here.
-    const messagesToPersist = conv.channel === 'whatsapp' && esImagenAdjunta
+    // WhatsApp's send-media route persists uploaded media; persist only separate text here.
+    const mediaPersistedBySendRoute = conv.channel === 'whatsapp' && !!mediaUrl && (esImagenAdjunta || mediaType === 'document');
+    const messagesToPersist = mediaPersistedBySendRoute
       ? enviarImagenYTexto && textoImagenWhatsAppEnviado
         ? [textMsg]
         : []

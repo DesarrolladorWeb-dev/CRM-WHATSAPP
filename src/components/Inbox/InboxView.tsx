@@ -38,7 +38,7 @@ interface InboxViewProps {
   activeConversationId: string;
   onSelectConversation: (id: string) => void;
   messagesMap: Record<string, Message[]>;
-  onSendMessage: (conversationId: string, text: string, aiGenerated?: boolean, mediaUrl?: string, interactive?: InteractiveContent, mediaType?: 'image') => void;
+  onSendMessage: (conversationId: string, text: string, aiGenerated?: boolean, mediaUrl?: string, interactive?: InteractiveContent, mediaType?: Message['mediaType'], filename?: string, mimetype?: string) => void;
   onUpdateContactStage: (contactId: string, newStage: PipelineStage) => void;
   onUpdateContactTags: (contactId: string, newTags: string[]) => void;
   handleDeleteConversation: (conversationId: string) => void;
@@ -331,6 +331,10 @@ export const InboxView: React.FC<InboxViewProps> = ({
   const [tagInput, setTagInput] = useState<string>('');
   const [isQuickRepliesModalOpen, setIsQuickRepliesModalOpen] = useState<boolean>(false);
   const [attachedImageUrl, setAttachedImageUrl] = useState<string>('');
+  const [attachedFileName, setAttachedFileName] = useState<string>('');
+  const [attachedMimeType, setAttachedMimeType] = useState<string>('');
+  const [attachedMediaType, setAttachedMediaType] = useState<Message['mediaType']>('image');
+  const [attachmentError, setAttachmentError] = useState<string>('');
   const [showAttachInput, setShowAttachInput] = useState<boolean>(false);
   // Id de la imagen abierta en el visor (null = cerrado).
   const [lightboxImageId, setLightboxImageId] = useState<string | null>(null);
@@ -550,9 +554,22 @@ export const InboxView: React.FC<InboxViewProps> = ({
 
   const handleSend = () => {
     if ((!inputText.trim() && !attachedImageUrl) || !activeConv) return;
-    onSendMessage(activeConv.id, inputText.trim(), false, attachedImageUrl || undefined,undefined,'image');
+    onSendMessage(
+      activeConv.id,
+      inputText.trim(),
+      false,
+      attachedImageUrl || undefined,
+      undefined,
+      attachedMediaType,
+      attachedFileName || undefined,
+      attachedMimeType || undefined,
+    );
     setInputText('');
     setAttachedImageUrl('');
+    setAttachedFileName('');
+    setAttachedMimeType('');
+    setAttachedMediaType('image');
+    setAttachmentError('');
     setShowAttachInput(false);
     setAiSuggestions(null);
   };
@@ -1580,28 +1597,62 @@ export const InboxView: React.FC<InboxViewProps> = ({
               }
 
               {showAttachInput && (
-                <div className="p-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl flex items-center gap-2 shadow-2xs text-slate-600 dark:text-slate-300">
+                <div className="p-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl flex flex-wrap items-center gap-2 shadow-2xs text-slate-600 dark:text-slate-300">
                   <ImageIcon className="w-4 h-4 shrink-0" />
                   <input
                     type="url"
                     value={attachedImageUrl}
-                    onChange={(e) => setAttachedImageUrl(e.target.value)}
+                    onChange={(e) => {
+                      setAttachedImageUrl(e.target.value);
+                      setAttachedFileName('');
+                      setAttachedMimeType('');
+                      setAttachedMediaType('image');
+                      setAttachmentError('');
+                    }}
                     placeholder="Pega la URL de una imagen (ej: https://...)"
                     className="flex-1 min-w-0 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-2.5 py-1 text-xs text-slate-800 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 outline-none focus:ring-2 focus:ring-emerald-500/20"
                   />
                   <label
-                    title="Subir imagen desde tu PC"
+                    title="Subir imagen o documento desde tu PC"
                     className="px-2.5 py-1 bg-emerald-50 dark:bg-emerald-900/40 hover:bg-emerald-100 dark:hover:bg-emerald-900/70 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700 rounded-xl text-[11px] font-bold flex items-center gap-1 cursor-pointer transition-colors shrink-0"
                   >
                     <FolderOpen className="w-3.5 h-3.5" />
                     <span>Subir de PC</span>
                     <input
                       type="file"
-                      accept="image/*"
+                      accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation"
                       className="hidden"
                       onChange={(e) => {
                         const file = e.target.files?.[0];
                         if (!file) return;
+                        setAttachmentError('');
+                        const extension = file.name.split('.').pop()?.toLowerCase();
+                        const supportedImages = new Set(['jpg', 'jpeg', 'png', 'webp', 'gif', 'avif', 'bmp', 'tif', 'tiff', 'ico', 'heic', 'heif']);
+                        const isImage = file.type.startsWith('image/') || supportedImages.has(extension || '');
+                        const supportedDocuments = new Set(['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx']);
+                        if (!isImage && !supportedDocuments.has(extension || '')) {
+                          setAttachmentError('Formato no permitido. Elige una imagen, PDF, Word, Excel o PowerPoint.');
+                          e.target.value = '';
+                          return;
+                        }
+                        const maxBytes = (isImage ? 10 : 50) * 1024 * 1024;
+                        if (file.size > maxBytes) {
+                          setAttachmentError(`El archivo supera el límite de ${isImage ? 10 : 50} MiB.`);
+                          e.target.value = '';
+                          return;
+                        }
+                        const officeMimeTypes: Record<string, string> = {
+                          pdf: 'application/pdf',
+                          doc: 'application/msword',
+                          docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                          xls: 'application/vnd.ms-excel',
+                          xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                          ppt: 'application/vnd.ms-powerpoint',
+                          pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+                        };
+                        setAttachedFileName(file.name);
+                        setAttachedMimeType(file.type || officeMimeTypes[extension || ''] || '');
+                        setAttachedMediaType(isImage ? 'image' : 'document');
                         const reader = new FileReader();
                         reader.onload = (ev) => {
                           if (ev.target?.result) {
@@ -1613,17 +1664,32 @@ export const InboxView: React.FC<InboxViewProps> = ({
                     />
                   </label>
                   {attachedImageUrl && (
-                    <img
-                      src={attachedImageUrl}
-                      alt="Preview"
-                      className="w-8 h-8 rounded-lg object-cover border border-slate-200 shadow-2xs shrink-0"
-                    />
+                    attachedMediaType === 'image' ? (
+                      <img
+                        src={attachedImageUrl}
+                        alt="Preview"
+                        className="w-8 h-8 rounded-lg object-cover border border-slate-200 shadow-2xs shrink-0"
+                      />
+                    ) : (
+                      <span className="max-w-48 truncate text-[11px] font-semibold" title={attachedFileName}>
+                        <FileText className="inline w-4 h-4 mr-1" />{attachedFileName}
+                      </span>
+                    )
+                  )}
+                  {attachmentError && (
+                    <span role="alert" className="basis-full text-[11px] font-semibold text-red-600 dark:text-red-400">
+                      {attachmentError}
+                    </span>
                   )}
                   <button
                     type="button"
                     onClick={() => {
                       setShowAttachInput(false);
                       setAttachedImageUrl('');
+                      setAttachedFileName('');
+                      setAttachedMimeType('');
+                      setAttachedMediaType('image');
+                      setAttachmentError('');
                     }}
                     aria-label="Cancelar adjunto de imagen"
                     className="text-slate-400 hover:text-slate-600 px-1 cursor-pointer"
@@ -1637,8 +1703,8 @@ export const InboxView: React.FC<InboxViewProps> = ({
                 <button
                   type="button"
                   onClick={() => setShowAttachInput(!showAttachInput)}
-                  title="Adjuntar imagen por URL o archivo"
-                  aria-label="Adjuntar imagen por URL o archivo"
+                  title="Adjuntar imagen o documento por URL o archivo"
+                  aria-label="Adjuntar imagen o documento por URL o archivo"
                   className={`p-2 rounded-xl transition-colors cursor-pointer ${attachedImageUrl || showAttachInput
                     ? 'bg-emerald-100 text-emerald-700'
                     : 'text-slate-400 hover:text-slate-600 hover:bg-slate-200/60'
