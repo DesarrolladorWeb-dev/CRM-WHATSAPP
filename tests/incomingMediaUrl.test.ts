@@ -138,6 +138,33 @@ describe('media entrante servida por URL (stickers)', () => {
     expect(saveMedia).not.toHaveBeenCalled();
   });
 
+  it('acepta mediaInfo, que el servicio manda junto a media', async () => {
+    // Payload real del servicio (whatsapp.service.js -> sendToWebhook): ademas
+    // de `media` incluye `mediaInfo`. Con el schema en `.strict()` y el campo
+    // sin declarar, todo mensaje con multimedia respondia 400 y no se guardaba
+    // ni el mensaje ni el archivo.
+    await ingestar({
+      hasMedia: true,
+      mediaType: 'image',
+      mediaInfo: {
+        mimetype: 'image/jpeg',
+        fileName: null,
+        caption: null,
+        width: 1080,
+        height: 1350,
+        seconds: null,
+      },
+      media: {
+        mimetype: 'image/jpeg',
+        data: Buffer.from('imagen').toString('base64'),
+      },
+    });
+
+    const { update } = ultimoUpsert();
+    expect(update.$set.hasMedia).toBe(true);
+    expect(update.$set.mediaType).toBe('image');
+  });
+
   it('descarta esquemas que el navegador no cargaria', async () => {
     await ingestar({
       hasMedia: true,

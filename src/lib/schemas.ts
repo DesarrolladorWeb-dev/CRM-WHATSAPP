@@ -611,6 +611,18 @@ export const incomingPayloadSchema = z
     media: mediaDataSchema
       .nullish()
       .transform((valor) => valor ?? undefined),
+    // El servicio de WhatsApp anade `mediaInfo` (mimetype, fileName, caption,
+    // width, height, seconds) junto a `media`, tanto en el webhook como en el
+    // evento de Socket.IO. No aporta nada nuevo: todo eso viaja ya dentro de
+    // `media`. Pero este schema es `.strict()`, y al no estar declarado el
+    // campo, TODOS los mensajes con multimedia acababan en 400 ("Unrecognized
+    // key: mediaInfo") y no se guardaba ni el mensaje ni el archivo. Los de
+    // solo texto se salvaban porque `mediaInfo` es `undefined` y
+    // `JSON.stringify` lo elimina del body.
+    //
+    // `z.unknown()` porque no se inspecciona: se acepta por compatibilidad y
+    // el ingest no lo usa.
+    mediaInfo: z.unknown().optional(),
     // Algunos mensajes (tipicamente stickers) llegan con el binario ya servido
     // por URL en vez de base64. Sin declararlo aqui, el campo se descartaba y
     // el chat pintaba una burbuja vacia.

@@ -54,6 +54,13 @@ export interface IncomingPayload {
    * base64 y un sticker que llegaba por URL se guardaba sin fuente.
    */
   mediaUrl?: string;
+  /**
+   * Metadatos que el servicio de WhatsApp manda junto a `media` (mimetype,
+   * fileName, caption, width, height, seconds). Todo eso ya viaja dentro de
+   * `media`, asi que aqui solo se declara para que el schema `.strict()` no
+   * rechace el webhook con 400.
+   */
+  mediaInfo?: unknown;
   receivedAt?: string;
   // Campos adicionales para LIDs (Linked Identity de WhatsApp)
   isLid?: boolean;
