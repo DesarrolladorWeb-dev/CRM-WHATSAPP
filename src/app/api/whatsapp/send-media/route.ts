@@ -111,7 +111,6 @@ export async function POST(req: NextRequest) {
             targetConversationId = conversation?.id;
           }
         }
-        }
       }
 
       if (targetConversationId) {
