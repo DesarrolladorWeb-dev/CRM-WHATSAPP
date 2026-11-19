@@ -53,6 +53,7 @@ import { User } from '../generated/prisma/client';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { InteractiveContent, interactiveToText, parseInteractive } from '@/lib/whatsappInteractive';
 import { originFromMessage } from '@/lib/contactOrigin';
+import { upsertConversationInList } from '@/lib/conversationList';
 import {
   getMessageEventDate,
   mergeMessagesChronologically,
@@ -838,6 +839,9 @@ export default function HomePage() {
     }
 
     let targetId = '';
+    // El servidor ya sube el contador de no leidos al guardar (webhook o este
+    // POST). Si ademas se suma aqui, un solo mensaje deja "2 nuevos".
+    let contadorYaActualizado = false;
 
     if (saved?.conversation?.id) {
       targetId = saved.conversation.id;
@@ -849,14 +853,21 @@ export default function HomePage() {
           prev.some(c => c.id === sc.id) ? prev.map(c => (c.id === sc.id ? { ...c, ...sc } : c)) : [sc, ...prev]
         );
       }
-      if (saved.isNewConversation) {
-        setConversations(prev => [saved!.conversation!, ...prev]);
-        setActiveConversationId(targetId);
-      } else {
-        setConversations(prev =>
-          prev.map(c => (c.id === targetId ? saved!.conversation! : c))
-        );
-      }
+
+      // No basta con `isNewConversation`: el webhook (y el sondeo de 5 s)
+      // corren en paralelo a este POST. El primero que llega crea la
+      // conversacion y se lleva el `true`; el otro recibe `false` aunque en
+      // esta pestaña el chat no exista todavia. Con el `map()` de antes se
+      // descartaba en silencio y un contacto nuevo no aparecia hasta recargar
+      // (la recarga si lo trae de Postgres). Upsert por id.
+      const convServidor: Conversation = saved.conversation.contact
+        ? saved.conversation
+        : { ...saved.conversation, contact: saved.contact ?? contactoPlaceholder(saved.conversation) };
+      const yaEnLista = conversationsRef.current.some(c => c.id === targetId);
+
+      setConversations(prev => upsertConversationInList(prev, convServidor).conversations);
+      if (!yaEnLista) setActiveConversationId(targetId);
+      contadorYaActualizado = true;
     } else {
       // Fallback: la BD no respondio; igual mostramos el chat en memoria.
       let foundId = conversationByPhoneRef.current.get(conversationKey) || (lidBase ? conversationByPhoneRef.current.get(`lid:${lidBase}`) : '');
@@ -915,6 +926,8 @@ export default function HomePage() {
         setContacts(prev => [newContact, ...prev]);
         setConversations(prev => [newConv, ...prev]);
         setActiveConversationId(newConv.id);
+        // newConv ya nace con unreadCount 1: sumar otro daria 2.
+        contadorYaActualizado = true;
       }
     }
 
@@ -945,8 +958,9 @@ export default function HomePage() {
 
     // Si la conversacion esta abierta en pantalla, el mensaje se esta leyendo
     // ahora mismo: contarlo como no leido pondria un globo de "1 nuevo" en el
-    // chat que el usuario tiene delante.
-    const estaAbierta = targetId === activeConversationId;
+    // chat que el usuario tiene delante. Un chat nuevo se abre solo, asi que
+    // tambien cuenta como leido.
+    const estaAbierta = targetId === activeConversationId || !conversationsRef.current.some(c => c.id === targetId);
 
     setConversations(prev => prev.map(c => {
       if (c.id === targetId) {
@@ -956,7 +970,7 @@ export default function HomePage() {
           ...c,
           lastMessage: lastMessageDisplay,
           lastMessageTime: saved ? 'Ahora' : timestampLbl,
-          unreadCount: estaAbierta ? 0 : (c.unreadCount || 0) + 1,
+          unreadCount: estaAbierta ? 0 : (c.unreadCount || 0) + (contadorYaActualizado ? 0 : 1),
           // Refresca la etiqueta de la lista sin esperar a recargar.
           updatedAt: new Date().toISOString()
         };
