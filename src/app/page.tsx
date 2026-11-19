@@ -790,6 +790,9 @@ export default function HomePage() {
           // backend solo ve la bandera y no hay nada que persistir en disco.
           mediaType: raw.mediaType ?? undefined,
           media: raw.media ?? undefined,
+          // Stickers y demas media que el servicio ya sirve por URL: sin esto
+          // el backend solo veia `hasMedia` y no tenia nada que guardar.
+          mediaUrl: raw.mediaUrl ?? undefined,
           receivedAt: receivedAt.toISOString(),
           // Detectar si el from es un LID y enviar los campos adicionales
           isLid: fromIsLid,
@@ -926,10 +929,12 @@ export default function HomePage() {
       timestamp: saved?.message?.timestamp || timestampLbl,
       channel: 'whatsapp',
       status: 'read',
-      hasMedia: raw.hasMedia || false,
+      hasMedia: raw.hasMedia || Boolean(saved?.message?.mediaUrl || raw.mediaUrl || raw.media?.data),
       mediaType: saved?.message?.mediaType ?? raw.mediaType,
       media: saved?.message?.media ?? raw.media,
-      mediaUrl: saved?.message?.mediaUrl,
+      // El guardado manda; si el backend no devolvio URL (p. ej. POST fallido)
+      // se usa la que traia el socket para no dejar la burbuja vacia.
+      mediaUrl: saved?.message?.mediaUrl || raw.mediaUrl,
       interactive: saved?.message?.interactive ?? interactive ?? undefined
     };
 

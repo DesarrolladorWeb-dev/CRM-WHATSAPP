@@ -611,6 +611,14 @@ export const incomingPayloadSchema = z
     media: mediaDataSchema
       .nullish()
       .transform((valor) => valor ?? undefined),
+    // Algunos mensajes (tipicamente stickers) llegan con el binario ya servido
+    // por URL en vez de base64. Sin declararlo aqui, el campo se descartaba y
+    // el chat pintaba una burbuja vacia.
+    mediaUrl: z
+      .string()
+      .max(2000)
+      .nullish()
+      .transform((valor) => (valor && valor.trim() ? valor.trim() : undefined)),
     receivedAt: z
       .string()
       .max(40)

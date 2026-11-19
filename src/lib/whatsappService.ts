@@ -179,6 +179,10 @@ export interface ReceivedWhatsAppMessage {
   hasMedia?: boolean;
   mediaType?: MediaType;
   media?: MediaData;
+  // El servicio puede mandar el binario ya servido por URL (stickers, media
+  // que no viaja en base64). Antes se ignoraba en los entrantes y la burbuja
+  // quedaba vacia aunque el mensaje tuviera multimedia.
+  mediaUrl?: string;
   receivedAt?: string;
   rawMessage?: any;
 }

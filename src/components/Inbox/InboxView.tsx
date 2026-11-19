@@ -69,10 +69,18 @@ const URL_RE = /(https?:\/\/[^\s]+)/g
 // La multimedia nueva se sirve desde /api/media/... (disco);
 // los mensajes antiguos siguen trayendo el base64 embebido.
 function getMessageMediaSrc(msg: Message): string {
-  return (
-    msg.mediaUrl ||
-    (msg.media?.data ? `data:${msg.media.mimetype};base64,${msg.media.data}` : '')
-  )
+  const directa = (msg.mediaUrl || '').trim()
+  if (directa) return directa
+
+  const data = (msg.media?.data || '').trim()
+  if (!data) return ''
+
+  // `media.data` normalmente es base64, pero hay integraciones que meten ahi la
+  // URL ya servida o un data URL completo. Envolver eso otra vez producia
+  // `data:image/webp;base64,https://...`, que el navegador no puede cargar.
+  if (/^(https?:\/\/|data:)/i.test(data)) return data
+
+  return `data:${msg.media?.mimetype || 'application/octet-stream'};base64,${data}`
 }
 
 function isImageMessage(msg: Message): boolean {
@@ -1317,6 +1325,15 @@ export const InboxView: React.FC<InboxViewProps> = ({
                             </div>
                           )}
                         </>
+                      )}
+
+                      {/* Sticker sin fuente: el servicio aviso `hasMedia` pero no
+                          mando binario ni URL. Sin esto la burbuja salia vacia
+                          (un hueco de 0 px) y parecia que no habia llegado. */}
+                      {msg.mediaType === 'sticker' && !mediaSrc && (
+                        <div className="mb-2 w-32 h-32 flex items-center justify-center px-2 text-center rounded-xl bg-slate-100 dark:bg-slate-700 text-[10px] font-semibold text-slate-500 dark:text-slate-300">
+                          Sticker no disponible
+                        </div>
                       )}
 
                       {/* {msg.text && (

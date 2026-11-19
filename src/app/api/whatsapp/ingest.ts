@@ -48,6 +48,12 @@ export interface IncomingPayload {
   hasMedia?: boolean;
   mediaType?: MediaType;
   media?: MediaData;
+  /**
+   * URL del binario cuando el servicio ya lo tiene servido (stickers, media
+   * reenviada). Es la alternativa a `media.data`: antes solo se entendia el
+   * base64 y un sticker que llegaba por URL se guardaba sin fuente.
+   */
+  mediaUrl?: string;
   receivedAt?: string;
   // Campos adicionales para LIDs (Linked Identity de WhatsApp)
   isLid?: boolean;
@@ -393,15 +399,23 @@ export async function handleIncomingPayload(body: IncomingPayload): Promise<Next
     }
 
     let savedMediaUrl: string | undefined;
+    // La multimedia puede llegar de dos formas: base64 en `media` (lo normal)
+    // o ya servida por URL (`mediaUrl`, o `media.data` con la URL). Antes solo
+    // se entendia el base64, asi que un sticker que llegaba por URL se guardaba
+    // con hasMedia=false y sin fuente: la burbuja aparecia vacia para siempre.
+    const urlEntrante =
+      urlDeMedia(body.mediaUrl) ||
+      (body.media && esUrlDeMedia(body.media.data) ? urlDeMedia(body.media.data) : undefined);
+
     const updateFields: Record<string, unknown> = {
-      hasMedia: body.hasMedia || false,
+      hasMedia: body.hasMedia || Boolean(urlEntrante) || false,
     };
 
-    if (body.hasMedia && body.mediaType) {
+    if ((body.hasMedia || urlEntrante) && body.mediaType) {
       updateFields.mediaType = body.mediaType;
     }
 
-    if (body.hasMedia && body.media) {
+    if (body.hasMedia && body.media && !esUrlDeMedia(body.media.data)) {
       const esDataUrl = body.media.data.startsWith('data:');
       const saved: SavedMedia | null = await saveMedia({
         conversationId: conversation.id,
@@ -428,6 +442,21 @@ export async function handleIncomingPayload(body: IncomingPayload): Promise<Next
         updateFields.media = {
           mimetype: body.media.mimetype,
           data: body.media.data,
+          size: body.media.size,
+          filename: body.media.filename,
+          width: body.media.width,
+          height: body.media.height,
+        };
+      }
+    } else if (urlEntrante) {
+      // Sin binario que escribir: se guarda la URL tal cual y, si el servicio
+      // mando metadatos, se conservan para mostrar mimetype/nombre en el chat.
+      updateFields.mediaUrl = urlEntrante;
+      savedMediaUrl = urlEntrante;
+      if (body.media) {
+        updateFields.media = {
+          mimetype: body.media.mimetype,
+          data: '',
           size: body.media.size,
           filename: body.media.filename,
           width: body.media.width,
@@ -537,6 +566,28 @@ function getMediaLabel(mediaType?: string): string {
     case 'sticker': return '🏷️ Sticker';
     default: return '📎 Archivo';
   }
+}
+
+/**
+ * Solo se aceptan URLs que un `<img>/<audio>/<video>` pueda cargar: http(s) o
+ * un data URL de imagen/audio/video. Cualquier otro esquema (javascript:,
+ * file:) se descarta para no guardar algo que el navegador ejecutaria o que
+ * nunca cargaria.
+ */
+function urlDeMedia(valor: string | null | undefined): string | undefined {
+  const v = String(valor ?? '').trim();
+  if (!v) return undefined;
+  if (/^https?:\/\//i.test(v) || /^data:(image|audio|video)\//i.test(v)) return v;
+  return undefined;
+}
+
+/**
+ * `media.data` deberia ser base64, pero hay integraciones que meten ahi la URL
+ * ya servida. Se distingue por el prefijo: el base64 nunca empieza por
+ * "http://" ni por "data:".
+ */
+function esUrlDeMedia(valor: string | null | undefined): boolean {
+  return urlDeMedia(valor) !== undefined;
 }
 
 export { sanitizeName, displayTime };
