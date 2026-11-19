@@ -503,7 +503,9 @@ export default function HomePage() {
       channel: conv.channel,
       status: 'sent',
       aiGenerated,
-      mediaUrl,
+      // Los documentos enviados solo conservan la tarjeta y sus metadatos en
+      // Mongo; el binario de origen no se deja como una descarga en el chat.
+      mediaUrl: mediaType === 'document' ? undefined : mediaUrl,
       hasMedia: !!mediaUrl,
       mediaType: mediaUrl ? mediaType || (mediaUrl.startsWith('data:image/') ? 'image' : undefined) : undefined,
       media: mediaUrl && filename ? { mimetype: mimetype || 'application/octet-stream', data: '', filename } : undefined,
@@ -669,6 +671,7 @@ export default function HomePage() {
             phone,
             type: 'document',
             media: mediaUrl,
+            conversationId,
             filename: filename || text.trim() || 'documento',
             mimetype,
             caption: text.trim() || undefined,

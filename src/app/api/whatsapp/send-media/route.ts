@@ -27,7 +27,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const { phone, type, media, caption, filename, mimetype } = body;
+    const { phone, type, media, caption, filename, mimetype, conversationId } = body;
 
     if (!phone || !type || !media) {
       return NextResponse.json(
@@ -74,73 +74,85 @@ export async function POST(req: NextRequest) {
       mongoConnected = false;
     }
 
-    if (mongoConnected && result.data) {
-      const db = await connectToPostgres();
-      if (db) {
-        // Buscar conversación activa para este contacto. El teléfono puede
-        // llegar como JID, con '+' o como dígitos pelados; antes se comparaba
-        // texto exacto y una imagen enviada por n8n no encontraba su contacto.
-        const phoneDigits = normalizePhone(phone);
-        const phoneCandidates = Array.from(new Set([
-          phone,
-          phoneDigits,
-          phoneDigits ? `+${phoneDigits}` : '',
-        ].filter(Boolean)));
-        const contact = await db.contact.findFirst({
-          where: {
-            OR: [
-              { phone: { in: phoneCandidates } },
-              { handle: phone },
-            ],
-          },
-        });
+    if (mongoConnected && result.ok) {
+      let targetConversationId =
+        typeof conversationId === 'string' && conversationId.trim()
+          ? conversationId.trim()
+          : undefined;
 
-        if (contact) {
-          const conversation = await db.conversation.findFirst({
-            where: { contactId: contact.id, channel: 'whatsapp' },
-            orderBy: { updatedAt: 'desc' },
-          });
-
-        if (conversation) {
-          // El binario (data URL o base64 crudo) se escribe en disco; en Mongo
-          // solo quedan la URL y los metadatos. Si el disco falla, se deja sin
-          // binario como hasta ahora (el mensaje igual queda registrado).
-          const msgId = result.data.messageId || `m_sent_${Date.now()}`;
-          const esDataUrl = typeof media === 'string' && media.startsWith('data:');
-          const esUrlRemota = typeof media === 'string' && /^https?:\/\//i.test(media);
-          const esBase64Crudo =
-            typeof media === 'string' && !esDataUrl && !esUrlRemota && !!mimetype;
-          const saved = esDataUrl || esBase64Crudo
-            ? await saveMedia({
-                conversationId: conversation.id,
-                messageId: msgId,
-                dataUrl: esDataUrl ? media : null,
-                base64: esBase64Crudo ? media : null,
-                mimetype,
-              })
-            : null;
-
-          await MessageModel.create({
-            id: msgId,
-            conversationId: conversation.id,
-            sender: 'agent',
-            senderName: 'Agente',
-            text: caption || (type === 'image' ? '' : `[${type.charAt(0).toUpperCase() + type.slice(1)} enviado]`),
-            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-            channel: 'whatsapp',
-            status: 'sent',
-            hasMedia: true,
-            mediaType: type,
-            mediaUrl: saved?.url || (esUrlRemota ? media : undefined),
-            media: {
-              mimetype: saved?.mimetype || mimetype || 'application/octet-stream',
-              data: '',
-              size: saved?.size,
-              filename: filename,
+      // Las llamadas antiguas (p. ej. n8n) pueden no traer conversationId.
+      // El CRM sí lo envía, así que no dependemos de inferirlo por teléfono.
+      if (!targetConversationId) {
+        const db = await connectToPostgres();
+        if (db) {
+          // Buscar conversación activa para este contacto. El teléfono puede
+          // llegar como JID, con '+' o como dígitos pelados; antes se comparaba
+          // texto exacto y una imagen enviada por n8n no encontraba su contacto.
+          const phoneDigits = normalizePhone(phone);
+          const phoneCandidates = Array.from(new Set([
+            phone,
+            phoneDigits,
+            phoneDigits ? `+${phoneDigits}` : '',
+          ].filter(Boolean)));
+          const contact = await db.contact.findFirst({
+            where: {
+              OR: [
+                { phone: { in: phoneCandidates } },
+                { handle: phone },
+              ],
             },
           });
+
+          if (contact) {
+            const conversation = await db.conversation.findFirst({
+              where: { contactId: contact.id, channel: 'whatsapp' },
+              orderBy: { updatedAt: 'desc' },
+            });
+            targetConversationId = conversation?.id;
+          }
         }
         }
+      }
+
+      if (targetConversationId) {
+        const msgId = result.data?.messageId || `m_sent_${Date.now()}`;
+        const esDataUrl = typeof media === 'string' && media.startsWith('data:');
+        const esUrlRemota = typeof media === 'string' && /^https?:\/\//i.test(media);
+        const esBase64Crudo =
+          typeof media === 'string' && !esDataUrl && !esUrlRemota && !!mimetype;
+        // Para documentos subidos desde el CRM guardamos solo la tarjeta y sus
+        // metadatos en Mongo. El archivo ya fue enviado a WhatsApp y no queda
+        // guardado en el contenedor ni disponible para descargar en el CRM.
+        const guardarBinario = !(type === 'document' && typeof conversationId === 'string' && conversationId.trim());
+        const saved = guardarBinario && (esDataUrl || esBase64Crudo)
+          ? await saveMedia({
+              conversationId: targetConversationId,
+              messageId: msgId,
+              dataUrl: esDataUrl ? media : null,
+              base64: esBase64Crudo ? media : null,
+              mimetype,
+            })
+          : null;
+
+        await MessageModel.create({
+          id: msgId,
+          conversationId: targetConversationId,
+          sender: 'agent',
+          senderName: 'Agente',
+          text: type === 'document' ? (caption || '') : (caption || (type === 'image' ? '' : `[${type.charAt(0).toUpperCase() + type.slice(1)} enviado]`)),
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          channel: 'whatsapp',
+          status: 'sent',
+          hasMedia: true,
+          mediaType: type,
+          mediaUrl: saved?.url || (guardarBinario && esUrlRemota ? media : undefined),
+          media: {
+            mimetype: saved?.mimetype || mimetype || 'application/octet-stream',
+            data: '',
+            size: saved?.size,
+            filename: filename,
+          },
+        });
       }
     }
 

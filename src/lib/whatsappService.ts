@@ -191,6 +191,7 @@ export interface SendMediaOptions {
   phone: string;
   type: MediaType;
   media: string;
+  conversationId?: string;
   caption?: string;
   filename?: string;
   mimetype?: string;
@@ -319,6 +320,7 @@ export function sendMediaMessage(
         phone: jidToSend,
         type: opts.type,
         media: opts.media,
+        conversationId: opts.conversationId,
         caption: opts.caption,
         filename: opts.filename,
         mimetype: opts.mimetype,
