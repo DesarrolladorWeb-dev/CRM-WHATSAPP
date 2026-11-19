@@ -11,6 +11,7 @@ import { connectToDatabase, isDbConnected } from '@/lib/mongodb';
 import { MessageModel } from '@/models/Message';
 import { logger, motivo } from '@/lib/logger';
 import { saveMedia } from '@/lib/mediaStorage';
+import { formatTime } from '@/lib/time';
 
 export async function POST(req: NextRequest) {
   // Navegador (sesión JWT) o n8n (x-n8n-secret, ver MACHINE_PATHS en lib/auth).
@@ -65,7 +66,12 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Guardar el mensaje enviado en MongoDB
+    const conversationIdDelChat =
+      typeof conversationId === 'string' ? conversationId.trim() : '';
+    const guardarSoloMetadatos = type === 'document' && !!conversationIdDelChat;
+    // null indica que WhatsApp confirmó el envío, pero falta el registro en Mongo.
+    let historyMessageId: string | null = null;
+
     let mongoConnected = false;
     try {
       const mongo = await connectToDatabase();
@@ -74,11 +80,8 @@ export async function POST(req: NextRequest) {
       mongoConnected = false;
     }
 
-    if (mongoConnected && result.ok) {
-      let targetConversationId =
-        typeof conversationId === 'string' && conversationId.trim()
-          ? conversationId.trim()
-          : undefined;
+    if (mongoConnected) {
+      let targetConversationId = conversationIdDelChat || undefined;
 
       // Las llamadas antiguas (p. ej. n8n) pueden no traer conversationId.
       // El CRM sí lo envía, así que no dependemos de inferirlo por teléfono.
@@ -122,7 +125,7 @@ export async function POST(req: NextRequest) {
         // Para documentos subidos desde el CRM guardamos solo la tarjeta y sus
         // metadatos en Mongo. El archivo ya fue enviado a WhatsApp y no queda
         // guardado en el contenedor ni disponible para descargar en el CRM.
-        const guardarBinario = !(type === 'document' && typeof conversationId === 'string' && conversationId.trim());
+        const guardarBinario = !guardarSoloMetadatos;
         const saved = guardarBinario && (esDataUrl || esBase64Crudo)
           ? await saveMedia({
               conversationId: targetConversationId,
@@ -133,13 +136,15 @@ export async function POST(req: NextRequest) {
             })
           : null;
 
-        await MessageModel.create({
+        const mensajeGuardado = await MessageModel.create({
           id: msgId,
           conversationId: targetConversationId,
           sender: 'agent',
-          senderName: 'Agente',
+          senderName: guardarSoloMetadatos ? 'Asistente XIO' : 'Agente',
           text: type === 'document' ? (caption || '') : (caption || (type === 'image' ? '' : `[${type.charAt(0).toUpperCase() + type.slice(1)} enviado]`)),
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          timestamp: guardarSoloMetadatos
+            ? formatTime()
+            : new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
           channel: 'whatsapp',
           status: 'sent',
           hasMedia: true,
@@ -151,13 +156,21 @@ export async function POST(req: NextRequest) {
             size: saved?.size,
             filename: filename,
           },
+        }).catch((error: unknown) => {
+          if (!guardarSoloMetadatos) throw error;
+          logger.error('whatsapp.send-media.history_error', { msgId, motivo: motivo(error) });
+          return null;
         });
+        if (guardarSoloMetadatos && mensajeGuardado) {
+          historyMessageId = mensajeGuardado.id;
+        }
       }
     }
 
     return NextResponse.json({
       success: true,
       data: result.data,
+      ...(guardarSoloMetadatos ? { historyMessageId } : {}),
     });
   } catch (error) {
     logger.error('whatsapp.send-media.exception', { motivo: motivo(error) });

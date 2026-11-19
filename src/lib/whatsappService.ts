@@ -214,10 +214,12 @@ type ServiceBody<T> = { success: boolean } & T;
 type Req<T> = { ok: boolean; data: ServiceBody<T> | null; error?: string; status?: number };
 
 /** Hace una peticion al servicio y nunca lanza: devuelve un resultado explicito. */
-async function request<T>(path: string, init?: RequestInit): Promise<Req<T>> {
+async function request<T>(path: string, init?: RequestInit, browserPath?: string): Promise<Req<T>> {
   try {
     const isServer = typeof window === 'undefined';
-    const target = isServer ? `${SERVICE_URL}${path}` : path.replace('/api/whatsapp/', '/api/wa-bridge/');
+    const target = isServer
+      ? `${SERVICE_URL}${path}`
+      : browserPath ?? path.replace('/api/whatsapp/', '/api/wa-bridge/');
     const secretHeader = isServer && process.env.WHATSAPP_SERVICE_SECRET
       ? { 'x-service-secret': process.env.WHATSAPP_SERVICE_SECRET }
       : {};
@@ -307,14 +309,24 @@ export function sendProductInfo(
   );
 }
 
+type SendMediaResult = {
+  messageId?: string;
+  chatId?: string;
+  timestamp?: number;
+  historyMessageId?: string | null;
+};
+
 /** POST /api/whatsapp/send-media (envía imágenes, audios, videos, documentos y stickers). */
 export function sendMediaMessage(
   opts: SendMediaOptions
-): Promise<AsService<{ messageId?: string; chatId?: string; timestamp?: number }>> {
+): Promise<AsService<SendMediaResult>> {
   const jidToSend = getJidForSending(opts.phone);
+  const path = '/api/whatsapp/send-media';
+  // Los documentos del chat pasan por el CRM para registrar el envío en Mongo.
+  const browserPath = opts.type === 'document' && opts.conversationId ? path : undefined;
 
-  return unwrap<{ messageId?: string; chatId?: string; timestamp?: number }>(
-    request<{ messageId?: string; chatId?: string; timestamp?: number }>('/api/whatsapp/send-media', {
+  return unwrap(
+    request<SendMediaResult>(path, {
       method: 'POST',
       body: JSON.stringify({
         phone: jidToSend,
@@ -325,7 +337,7 @@ export function sendMediaMessage(
         filename: opts.filename,
         mimetype: opts.mimetype,
       }),
-    })
+    }, browserPath)
   );
 }
 

@@ -492,6 +492,16 @@ export default function HomePage() {
     const conv = conversations.find(c => c.id === conversationId);
     if (!conv) return;
 
+    const esImagenAdjunta =
+      !!mediaUrl &&
+      ((mediaType || (mediaUrl.startsWith('data:image/') ? 'image' : undefined)) === 'image');
+    const esAudioSimulado = !!mediaUrl && mediaUrl.startsWith('data:audio/');
+    const esVideo = !!mediaUrl && mediaUrl.startsWith('data:video/');
+    const esDocumentoWhatsApp = conv.channel === 'whatsapp' && !!mediaUrl &&
+      !interactive && (mediaType === 'document' || (!esImagenAdjunta && !esAudioSimulado && !esVideo));
+    const esDocumento = mediaType === 'document' || esDocumentoWhatsApp;
+    const nombreDocumento = esDocumento ? (filename || text.trim() || 'Documento') : undefined;
+
     const newMsg: Message = {
       id: `m_${Date.now()}`,
       conversationId,
@@ -505,16 +515,15 @@ export default function HomePage() {
       aiGenerated,
       // Los documentos enviados solo conservan la tarjeta y sus metadatos en
       // Mongo; el binario de origen no se deja como una descarga en el chat.
-      mediaUrl: mediaType === 'document' ? undefined : mediaUrl,
+      mediaUrl: esDocumento ? undefined : mediaUrl,
       hasMedia: !!mediaUrl,
-      mediaType: mediaUrl ? mediaType || (mediaUrl.startsWith('data:image/') ? 'image' : undefined) : undefined,
-      media: mediaUrl && filename ? { mimetype: mimetype || 'application/octet-stream', data: '', filename } : undefined,
+      mediaType: mediaUrl ? (esDocumento ? 'document' : mediaType || (esImagenAdjunta ? 'image' : undefined)) : undefined,
+      media: mediaUrl && (nombreDocumento || filename)
+        ? { mimetype: mimetype || 'application/octet-stream', data: '', filename: nombreDocumento || filename }
+        : undefined,
       interactive
     };
 
-    const esImagenAdjunta =
-      !!mediaUrl &&
-      ((mediaType || (mediaUrl.startsWith('data:image/') ? 'image' : undefined)) === 'image');
     const enviarImagenYTexto = esImagenAdjunta && !!text.trim();
     let textoImagenWhatsAppEnviado = false;
 
@@ -555,7 +564,7 @@ export default function HomePage() {
             : enviarImagenYTexto
               ? text.trim()
               : mediaUrl
-                ? mediaType === 'document'
+                ? esDocumento
                   ? `📎 ${text || filename || 'Documento adjunto'}`
                   : `📷 ${text || 'Imagen adjunta'}`
                 : text,
@@ -584,10 +593,7 @@ export default function HomePage() {
         phone = normalizePhone(conv.contact.phone || conv.contact.handle || '');
       }
 
-      const esAudioSimulado = !!mediaUrl && mediaUrl.startsWith('data:audio/');
       const esImagen = esImagenAdjunta;
-      const esVideo = !!mediaUrl && mediaUrl.startsWith('data:video/');
-      const esDocumento = !!mediaUrl && (mediaType === 'document' || (!esAudioSimulado && !esImagen && !esVideo));
 
       if (interactive) {
         const lid = isLid(conv.contact.handle || '') ? conv.contact.handle!.split('@')[0] : null;
@@ -652,7 +658,32 @@ export default function HomePage() {
       }
     }
   }
-        else if (esAudioSimulado) {
+        else if (esDocumentoWhatsApp) {
+          const documentoEnviado = await sendMediaMessage({
+            phone,
+            type: 'document',
+            media: mediaUrl,
+            conversationId,
+            filename: nombreDocumento,
+            mimetype,
+            caption: text.trim() || undefined,
+          });
+          resultado = documentoEnviado;
+          if (documentoEnviado.ok) {
+            const idGuardado = documentoEnviado.data.historyMessageId;
+            if (idGuardado) {
+              setMessagesMap(prev => ({
+                ...prev,
+                [conversationId]: mergeMessagesChronologically([
+                  { ...newMsg, id: idGuardado },
+                  ...(prev[conversationId] || []).filter(msg => msg.id !== newMsg.id),
+                ]),
+              }));
+            } else {
+              setWhatsappError('WhatsApp recibió el documento, pero no se pudo guardar en el historial del CRM.');
+            }
+          }
+        } else if (esAudioSimulado) {
             resultado = await sendMediaMessage({
             phone,
             type: 'audio',
@@ -664,16 +695,6 @@ export default function HomePage() {
             phone,
             type: 'video',
             media: mediaUrl,
-            caption: text.trim() || undefined,
-          });
-        } else if (esDocumento) {
-          resultado = await sendMediaMessage({
-            phone,
-            type: 'document',
-            media: mediaUrl,
-            conversationId,
-            filename: filename || text.trim() || 'documento',
-            mimetype,
             caption: text.trim() || undefined,
           });
         } else {
@@ -697,8 +718,8 @@ export default function HomePage() {
       }
     }
 
-    // WhatsApp's send-media route persists uploaded media; persist only separate text here.
-    const mediaPersistedBySendRoute = conv.channel === 'whatsapp' && !!mediaUrl && (esImagenAdjunta || mediaType === 'document');
+    // La ruta de envío registra el documento y devuelve el ID guardado en Mongo.
+    const mediaPersistedBySendRoute = esDocumentoWhatsApp || (conv.channel === 'whatsapp' && esImagenAdjunta);
     const messagesToPersist = mediaPersistedBySendRoute
       ? enviarImagenYTexto && textoImagenWhatsAppEnviado
         ? [textMsg]
