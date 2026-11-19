@@ -1327,12 +1327,15 @@ export const InboxView: React.FC<InboxViewProps> = ({
                         </>
                       )}
 
-                      {/* Sticker sin fuente: el servicio aviso `hasMedia` pero no
-                          mando binario ni URL. Sin esto la burbuja salia vacia
-                          (un hueco de 0 px) y parecia que no habia llegado. */}
-                      {msg.mediaType === 'sticker' && !mediaSrc && (
+                      {/* Multimedia sin fuente: el socket del servicio no lleva
+                          el binario (viaja aparte, por el webhook), asi que
+                          hasta que la base responde la burbuja se quedaba en
+                          blanco (un hueco de 0 px). Se avisa en vez de dejar
+                          un hueco invisible. Los documentos tienen su propio
+                          bloque con el nombre del archivo. */}
+                      {!mediaSrc && msg.mediaType !== 'document' && (msg.hasMedia || msg.mediaType) && (
                         <div className="mb-2 w-32 h-32 flex items-center justify-center px-2 text-center rounded-xl bg-slate-100 dark:bg-slate-700 text-[10px] font-semibold text-slate-500 dark:text-slate-300">
-                          Sticker no disponible
+                          {msg.mediaType === 'sticker' ? 'Sticker no disponible' : 'Archivo no disponible'}
                         </div>
                       )}
 

@@ -2,15 +2,16 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // El ingest arrastra medio backend: aqui solo interesa como trata la multimedia
 // que llega como URL (stickers) en vez de base64.
-const { updateOne, saveMedia, bumpLastMessage, contactFindFirst, conversationFindFirst } = vi.hoisted(() => ({
+const { updateOne, findOne, saveMedia, bumpLastMessage, contactFindFirst, conversationFindFirst } = vi.hoisted(() => ({
   updateOne: vi.fn(),
+  findOne: vi.fn(),
   saveMedia: vi.fn(),
   bumpLastMessage: vi.fn(),
   contactFindFirst: vi.fn(),
   conversationFindFirst: vi.fn(),
 }));
 
-vi.mock('@/models/Message', () => ({ MessageModel: { updateOne } }));
+vi.mock('@/models/Message', () => ({ MessageModel: { updateOne, findOne } }));
 
 vi.mock('@/lib/mongodb', () => ({
   connectToDatabase: vi.fn(async () => ({})),
@@ -61,6 +62,14 @@ async function ingestar(extra: Partial<IncomingPayload> = {}) {
     ...extra,
   });
   expect(res.status).toBe(200);
+  return res.json() as Promise<{
+    data: { message: { mediaUrl?: string; hasMedia?: boolean; mediaType?: string } };
+  }>;
+}
+
+/** Simula `MessageModel.findOne(...).select(...).lean()`. */
+function documentoGuardado(doc: unknown) {
+  findOne.mockReturnValue({ select: () => ({ lean: async () => doc }) });
 }
 
 describe('media entrante servida por URL (stickers)', () => {
@@ -94,6 +103,7 @@ describe('media entrante servida por URL (stickers)', () => {
     });
 
     updateOne.mockResolvedValue({ upsertedCount: 1 });
+    documentoGuardado(null);
   });
 
   it('guarda la URL del sticker y lo marca con multimedia', async () => {
@@ -139,5 +149,17 @@ describe('media entrante servida por URL (stickers)', () => {
     expect(update.$set.mediaUrl).toBeUndefined();
     // `hasMedia` sigue viniendo del service; lo que se descarta es la fuente.
     expect(update.$set.hasMedia).toBe(true);
+  });
+
+  it('devuelve la mediaUrl que ya guardo el webhook', async () => {
+    // El evento de socket llega sin binario; el webhook lo guardo antes.
+    documentoGuardado({ mediaUrl: '/api/media/conv_1/m_sticker_1.webp' });
+
+    const payload = await ingestar({ hasMedia: true, mediaType: 'sticker' });
+
+    expect(payload.data.message.mediaUrl).toBe('/api/media/conv_1/m_sticker_1.webp');
+    // No se reescribe la fuente: solo se devuelve la que ya estaba.
+    const { update } = ultimoUpsert();
+    expect(update.$set.mediaUrl).toBeUndefined();
   });
 });

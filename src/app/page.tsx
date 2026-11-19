@@ -461,9 +461,14 @@ export default function HomePage() {
 
         setMessagesMap(prev => ({
           ...prev,
+          // La base va DESPUES para que gane en el merge: la copia en memoria de
+          // un mensaje con multimedia llega sin binario (el socket del servicio
+          // solo manda metadatos) y, si ganaba, tapaba para siempre la version
+          // buena que devuelve /api/messages. Por eso el sticker o la imagen
+          // solo se veian tras recargar.
           [convId]: mergeMessagesChronologically([
-            ...data.data,
             ...(prev[convId] || []),
+            ...data.data,
           ]),
         }));
       } catch {
@@ -707,8 +712,65 @@ export default function HomePage() {
     return { phone: phone || null, lid }
   }
 
-  const handleDeleteConversation = async (conversationId: string) => {
-    const conv = conversations.find(c => c.id === conversationId)
+  // Mensajes con multimedia cuya fuente aun no conocemos: se reintenta leerlos
+  // de la base porque el binario lo guarda el webhook, no el evento de socket.
+  const mediaRetryIdsRef = useRef<Set<string>>(new Set());
+
+  /**
+   * Relee de la base un mensaje con multimedia que llego sin fuente.
+   *
+   * El servicio de WhatsApp emite por Socket.IO solo metadatos (`media: null`);
+   * el binario va aparte en el POST al webhook. Como el evento se emite antes
+   * que el webhook, la primera respuesta del ingest casi nunca trae `mediaUrl`.
+   * Se reintenta a los 1.5 s, 5 s y 12 s hasta que el webhook lo haya guardado;
+   * en cuanto aparece, la version de la base reemplaza a la copia en memoria.
+   */
+  const refreshMessageMedia = (conversationId: string, messageId: string) => {
+    if (mediaRetryIdsRef.current.has(messageId)) return;
+    mediaRetryIdsRef.current.add(messageId);
+
+    const esperas = [1500, 5000, 12000];
+
+    const intentar = (indice: number) => {
+      if (indice >= esperas.length) {
+        mediaRetryIdsRef.current.delete(messageId);
+        return;
+      }
+
+      window.setTimeout(async () => {
+        try {
+          const res = await apiFetch(
+            `/api/messages?conversationId=${encodeURIComponent(conversationId)}`
+          );
+          if (res.ok) {
+            const data = await res.json().catch(() => null);
+            if (data?.success && Array.isArray(data.data)) {
+              const guardados = data.data as Message[];
+              const guardado = guardados.find(m => m.id === messageId);
+              if (guardado?.mediaUrl || guardado?.media?.data) {
+                setMessagesMap(prev => ({
+                  ...prev,
+                  [conversationId]: mergeMessagesChronologically([
+                    ...(prev[conversationId] || []),
+                    ...guardados,
+                  ]),
+                }));
+                mediaRetryIdsRef.current.delete(messageId);
+                return;
+              }
+            }
+          }
+        } catch {
+          // Sin conexion: se reintenta en la siguiente espera.
+        }
+        intentar(indice + 1);
+      }, esperas[indice]);
+    };
+
+    intentar(0);
+  };
+
+  const handleDeleteConversation = async (conversationId: string) => {    const conv = conversations.find(c => c.id === conversationId)
     if (!conv) return
     const eraLaActiva = activeConversationId === conversationId
 
@@ -955,6 +1017,12 @@ export default function HomePage() {
       ...prev,
       [targetId]: mergeMessagesChronologically([...(prev[targetId] || []), incomingMsg])
     }));
+
+    // El socket no trae el binario: si la respuesta del ingest no dio fuente,
+    // se busca el mensaje ya guardado por el webhook (sticker, imagen, video).
+    if (incomingMsg.hasMedia && !incomingMsg.mediaUrl) {
+      refreshMessageMedia(targetId, incomingMsg.id);
+    }
 
     // Si la conversacion esta abierta en pantalla, el mensaje se esta leyendo
     // ahora mismo: contarlo como no leido pondria un globo de "1 nuevo" en el

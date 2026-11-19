@@ -520,6 +520,18 @@ export async function handleIncomingPayload(body: IncomingPayload): Promise<Next
       assignedAgent: conversation.assignedAgent,
     };
 
+    // El evento de socket no lleva el binario: si esta peticion no trajo media
+    // pero el mensaje ya esta guardado con fuente (normalmente lo guardo antes
+    // el webhook), se devuelve esa URL. Sin esto la burbuja del sticker o de la
+    // imagen se quedaba vacia hasta recargar la pagina.
+    let mediaUrlRespuesta = savedMediaUrl;
+    if (!mediaUrlRespuesta && body.hasMedia) {
+      const guardado = (await MessageModel.findOne({ id: messageId })
+        .select('mediaUrl')
+        .lean()) as { mediaUrl?: string } | null;
+      mediaUrlRespuesta = guardado?.mediaUrl;
+    }
+
     return NextResponse.json({
       success: true,
       source: 'postgres',
@@ -539,7 +551,7 @@ export async function handleIncomingPayload(body: IncomingPayload): Promise<Next
           hasMedia: body.hasMedia || false,
           mediaType: body.mediaType,
           media: body.media,
-          mediaUrl: savedMediaUrl,
+          mediaUrl: mediaUrlRespuesta,
           interactive: interactive ?? undefined
         },
         phone: isLid ? lidBase : phone,
