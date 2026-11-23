@@ -2049,13 +2049,20 @@ export default function HomePage() {
 
 
       {/* Sidebar */}
-      <Sidebar
-        activeTab={activeTab}
-        onSelectTab={cambiarTab}
-        unreadTotal={unreadTotal}
-        isOpen={isSidebarOpen}
-        onClose={() => setIsSidebarOpen(false)}
-      />
+      {/* Sidebar */}
+<Sidebar
+  activeTab={activeTab}
+  onSelectTab={cambiarTab}
+  unreadTotal={unreadTotal}
+  isOpen={isSidebarOpen}
+  onClose={() => setIsSidebarOpen(false)}
+  sessionPhone={formatPhoneDisplay(getSessionPhone(whatsappStatus))}
+  sessionName={getSessionName(whatsappStatus) || undefined}
+  whatsappConnected={
+    isWhatsappSocketConnected &&
+    whatsappStatus?.connectionStatus === 'connected'
+  }
+/>
 
       {/* Main Container */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
