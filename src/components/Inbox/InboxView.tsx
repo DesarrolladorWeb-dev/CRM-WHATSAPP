@@ -1263,13 +1263,25 @@ export const InboxView: React.FC<InboxViewProps> = ({
                       }`}
                     >
                       {msg.mediaType === 'document' && (
-                        <div className="mb-2 p-3 bg-slate-100 rounded-xl border border-slate-200 flex items-center gap-3">
-                          <FileText className="w-8 h-8 text-slate-500 shrink-0" />
+                        <div
+                          className={`mb-2 p-3 rounded-xl border flex items-center gap-3 ${
+                            isAgent
+                              ? 'bg-emerald-50/70 dark:bg-emerald-950/35 border-emerald-200/80 dark:border-emerald-700/60'
+                              : 'bg-slate-50/80 dark:bg-slate-900/50 border-slate-200 dark:border-slate-700'
+                          }`}
+                        >
+                          <FileText
+                            className={`w-8 h-8 shrink-0 ${
+                              isAgent
+                                ? 'text-emerald-700 dark:text-emerald-300'
+                                : 'text-slate-500 dark:text-slate-400'
+                            }`}
+                          />
                           <div className="flex-1 min-w-0">
-                            <p className="text-xs font-bold text-slate-800 truncate">
+                            <p className="text-xs font-bold text-slate-800 dark:text-slate-100 truncate">
                               {msg.media?.filename || 'Documento'}
                             </p>
-                            <p className="text-[10px] text-slate-500">
+                            <p className="text-[10px] text-slate-500 dark:text-slate-400">
                               {msg.media?.mimetype || 'Documento adjunto'}
                             </p>
                           </div>
@@ -1279,7 +1291,7 @@ export const InboxView: React.FC<InboxViewProps> = ({
                               target={mediaSrc.startsWith('/') ? undefined : '_blank'}
                               rel="noopener"
                               download={msg.media?.filename || 'documento'}
-                              className="px-2 py-1 bg-emerald-100 hover:bg-emerald-200 text-emerald-800 rounded-lg text-[10px] font-bold transition-colors"
+                              className="px-2 py-1 bg-emerald-100 hover:bg-emerald-200 dark:bg-emerald-900/70 dark:hover:bg-emerald-800/80 text-emerald-800 dark:text-emerald-100 rounded-lg text-[10px] font-bold transition-colors"
                             >
                               Descargar
                             </a>
