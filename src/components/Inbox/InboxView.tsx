@@ -293,6 +293,7 @@ export const InboxView: React.FC<InboxViewProps> = ({
   const [channelFilter, setChannelFilter] = useState<string>('all');
   const [mobileStage, setMobileStage] = useState<'list' | 'chat' | 'info'>('chat');
   const [inputText, setInputText] = useState<string>('');
+  const composerTextareaRef = useRef<HTMLTextAreaElement>(null);
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
   const [forwardText, setForwardText] = useState<string | null>(null);
   const [forwardTargets, setForwardTargets] = useState<Set<string>>(new Set());
@@ -317,6 +318,15 @@ export const InboxView: React.FC<InboxViewProps> = ({
       window.removeEventListener('blur', stopForwardDragging);
     };
   }, []);
+
+  // Mantiene el alto del campo de escritura ajustado al texto: una sola linea
+  // queda centrada respecto a los botones y crece cuando el mensaje ocupa mas.
+  useEffect(() => {
+    const el = composerTextareaRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${Math.min(el.scrollHeight, 128)}px`;
+  }, [inputText]);
 
   useEffect(() => {
     if (!copiedMessageId) return;
@@ -1729,6 +1739,7 @@ export const InboxView: React.FC<InboxViewProps> = ({
                 </button>
 
                 <textarea
+                  ref={composerTextareaRef}
                   value={inputText}
                   onChange={(e) => setInputText(e.target.value)}
                   onKeyDown={(e) => {
@@ -1738,8 +1749,8 @@ export const InboxView: React.FC<InboxViewProps> = ({
                     }
                   }}
                   placeholder={`Escribe un mensaje de WhatsApp para ${contact.name}...`}
-                  rows={2}
-                  className="flex-1 bg-transparent text-xs text-slate-800 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none resize-none px-1 font-medium"
+                  rows={1}
+                  className="flex-1 self-center bg-transparent text-xs leading-5 text-slate-800 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none resize-none px-1 py-2.5 font-medium max-h-32 overflow-y-auto"
                 />
 
 
@@ -1791,9 +1802,6 @@ export const InboxView: React.FC<InboxViewProps> = ({
               <Chrome className="w-4 h-4" />
               <span className="font-extrabold text-xs tracking-wide text-emerald-300">Extensión XIO</span>
             </div>
-            <span className="px-2.5 py-0.5 bg-emerald-500/20 text-emerald-300 text-[10px] font-extrabold rounded-full border border-emerald-500/30 flex items-center gap-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span> v3.4 Activa
-            </span>
           </div>
 
           <div className="p-3.5 border-b border-slate-200 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-800/50">

@@ -121,9 +121,9 @@ export const QuickReplyCategoriesModal: React.FC<QuickReplyCategoriesModalProps>
           onKeyDown(event);
           event.stopPropagation();
         }}
-        className="bg-white border border-slate-200 w-full max-w-xl rounded-2xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden outline-none"
+        className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 w-full max-w-xl rounded-2xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden outline-none"
       >
-        <div className="p-4 bg-slate-900 text-white flex items-center justify-between border-b border-slate-800 shrink-0">
+        <div className="p-4 bg-slate-900 dark:bg-slate-950 text-white flex items-center justify-between border-b border-slate-800 shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center border border-emerald-500/30">
               <Tag className="w-5 h-5" />
@@ -146,9 +146,9 @@ export const QuickReplyCategoriesModal: React.FC<QuickReplyCategoriesModalProps>
         </div>
 
         <div className="p-4 sm:p-5 overflow-y-auto space-y-4">
-          <form onSubmit={handleCreate} className="flex items-end gap-2 p-3 bg-slate-50 border border-slate-200 rounded-xl">
+          <form onSubmit={handleCreate} className="flex items-end gap-2 p-3 bg-slate-50 dark:bg-slate-950/40 border border-slate-200 dark:border-slate-800 rounded-xl">
             <div className="flex-1 min-w-0">
-              <label htmlFor={`${titleId}-new`} className="text-xs font-bold text-slate-700 block mb-1">
+              <label htmlFor={`${titleId}-new`} className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
                 Nueva categoría
               </label>
               <input
@@ -158,7 +158,7 @@ export const QuickReplyCategoriesModal: React.FC<QuickReplyCategoriesModalProps>
                 onChange={(event) => setNewLabel(event.target.value)}
                 maxLength={50}
                 placeholder="Ej. Seguimiento"
-                className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm text-slate-900 outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-900 dark:text-slate-100 dark:placeholder:text-slate-500 outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
               />
             </div>
             <button
@@ -172,15 +172,15 @@ export const QuickReplyCategoriesModal: React.FC<QuickReplyCategoriesModalProps>
           </form>
 
           {error && (
-            <div role="alert" className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs font-semibold text-red-700">
+            <div role="alert" className="p-3 bg-red-50 dark:bg-red-500/15 border border-red-200 dark:border-red-500/40 rounded-xl text-xs font-semibold text-red-700 dark:text-red-300">
               {error}
             </div>
           )}
 
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <h3 className="text-xs font-extrabold uppercase tracking-wider text-slate-600">Categorías disponibles</h3>
-              <span className="text-[10px] font-bold text-slate-400">{categories.length}</span>
+              <h3 className="text-xs font-extrabold uppercase tracking-wider text-slate-600 dark:text-slate-400">Categorías disponibles</h3>
+              <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500">{categories.length}</span>
             </div>
             {categories.map((category) => {
               const isDefault = category.id === 'general';
@@ -188,10 +188,10 @@ export const QuickReplyCategoriesModal: React.FC<QuickReplyCategoriesModalProps>
               const isPendingDelete = pendingDelete?.id === category.id;
 
               return (
-                <div key={category.id} className="p-3 bg-white border border-slate-200 rounded-xl">
+                <div key={category.id} className="p-3 bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl">
                   {isPendingDelete ? (
                     <div role="alertdialog" aria-label="Confirmar eliminación de categoría" className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                      <div className="flex items-start gap-2 text-amber-800">
+                      <div className="flex items-start gap-2 text-amber-800 dark:text-amber-300">
                         <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
                         <p className="text-xs font-semibold">¿Estás seguro de eliminar “{category.label}”?</p>
                       </div>
@@ -209,7 +209,7 @@ export const QuickReplyCategoriesModal: React.FC<QuickReplyCategoriesModalProps>
                           type="button"
                           onClick={() => setPendingDelete(null)}
                           disabled={isSaving}
-                          className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-lg text-xs cursor-pointer"
+                          className="px-3 py-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold rounded-lg text-xs cursor-pointer"
                         >
                           No, cancelar
                         </button>
@@ -224,24 +224,24 @@ export const QuickReplyCategoriesModal: React.FC<QuickReplyCategoriesModalProps>
                         onChange={(event) => setEditingLabel(event.target.value)}
                         maxLength={50}
                         aria-label={`Nuevo nombre para ${category.label}`}
-                        className="flex-1 min-w-0 px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-900 outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                        className="flex-1 min-w-0 px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-900 dark:text-slate-100 outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
                       />
-                      <button type="submit" disabled={isSaving || !editingLabel.trim()} className="p-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-lg cursor-pointer disabled:opacity-50" aria-label="Guardar nombre">
+                      <button type="submit" disabled={isSaving || !editingLabel.trim()} className="p-2 bg-emerald-50 dark:bg-emerald-500/15 hover:bg-emerald-100 dark:hover:bg-emerald-500/25 text-emerald-700 dark:text-emerald-300 rounded-lg cursor-pointer disabled:opacity-50" aria-label="Guardar nombre">
                         <Check className="w-4 h-4" />
                       </button>
-                      <button type="button" onClick={() => setEditingId(null)} disabled={isSaving} className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg cursor-pointer" aria-label="Cancelar edición">
+                      <button type="button" onClick={() => setEditingId(null)} disabled={isSaving} className="p-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-lg cursor-pointer" aria-label="Cancelar edición">
                         <X className="w-4 h-4" />
                       </button>
                     </form>
                   ) : (
                     <div className="flex items-center justify-between gap-3">
                       <div className="flex min-w-0 items-center gap-2">
-                        <span className="w-8 h-8 shrink-0 rounded-lg bg-slate-100 text-slate-600 flex items-center justify-center">
+                        <span className="w-8 h-8 shrink-0 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 flex items-center justify-center">
                           <Tag className="w-4 h-4" />
                         </span>
                         <div className="min-w-0">
-                          <p className="text-sm font-bold text-slate-800 truncate">{category.label}</p>
-                          <p className="text-[10px] text-slate-400">
+                          <p className="text-sm font-bold text-slate-800 dark:text-slate-200 truncate">{category.label}</p>
+                          <p className="text-[10px] text-slate-400 dark:text-slate-500">
                             {isDefault ? 'Categoría predeterminada' : `${category.usageCount ?? 0} plantillas asignadas`}
                           </p>
                         </div>
@@ -256,7 +256,7 @@ export const QuickReplyCategoriesModal: React.FC<QuickReplyCategoriesModalProps>
                           }}
                           title="Renombrar categoría"
                           aria-label={`Renombrar ${category.label}`}
-                          className="p-2 text-slate-400 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg cursor-pointer"
+                          className="p-2 text-slate-400 dark:text-slate-500 hover:text-emerald-700 dark:hover:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 rounded-lg cursor-pointer"
                         >
                           <Pencil className="w-4 h-4" />
                         </button>
@@ -269,7 +269,7 @@ export const QuickReplyCategoriesModal: React.FC<QuickReplyCategoriesModalProps>
                           }}
                           title={isDefault ? 'General es la categoría predeterminada' : isInUse ? 'Reasigna sus plantillas antes de eliminarla' : 'Eliminar categoría'}
                           aria-label={`Eliminar ${category.label}`}
-                          className="p-2 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg cursor-pointer disabled:text-slate-300 disabled:bg-transparent disabled:cursor-not-allowed"
+                          className="p-2 text-red-500 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-500/15 rounded-lg cursor-pointer disabled:text-slate-300 dark:disabled:text-slate-600 disabled:bg-transparent disabled:cursor-not-allowed"
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>
@@ -282,8 +282,8 @@ export const QuickReplyCategoriesModal: React.FC<QuickReplyCategoriesModalProps>
           </div>
         </div>
 
-        <div className="p-4 border-t border-slate-100 flex justify-end bg-white">
-          <button type="button" onClick={onClose} className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition-colors cursor-pointer">
+        <div className="p-4 border-t border-slate-100 dark:border-slate-800 flex justify-end bg-white dark:bg-slate-900">
+          <button type="button" onClick={onClose} className="px-4 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold rounded-xl text-xs transition-colors cursor-pointer">
             Cerrar
           </button>
         </div>

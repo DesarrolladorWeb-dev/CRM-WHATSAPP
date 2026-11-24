@@ -26,11 +26,11 @@ const generateQuickReplyId = () => `qr_${Date.now()}_${Math.random().toString(36
 
 const CATEGORY_ICONS: Record<string, React.ElementType> = { Zap, Hand, DollarSign, Tag, Wrench };
 const CATEGORY_COLOR_CLASSES: Record<string, string> = {
-  'bg-emerald-100 text-emerald-800': 'bg-emerald-100 text-emerald-800',
-  'bg-blue-100 text-blue-800': 'bg-blue-100 text-blue-800',
-  'bg-purple-100 text-purple-800': 'bg-purple-100 text-purple-800',
-  'bg-amber-100 text-amber-800': 'bg-amber-100 text-amber-800',
-  'bg-slate-100 text-slate-700': 'bg-slate-100 text-slate-700',
+  'bg-emerald-100 text-emerald-800': 'bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-300',
+  'bg-blue-100 text-blue-800': 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-300',
+  'bg-purple-100 text-purple-800': 'bg-purple-100 text-purple-800 dark:bg-purple-500/20 dark:text-purple-300',
+  'bg-amber-100 text-amber-800': 'bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-300',
+  'bg-slate-100 text-slate-700': 'bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-200',
 };
 
 export const QuickRepliesModal: React.FC<QuickRepliesModalProps> = ({
@@ -409,11 +409,11 @@ export const QuickRepliesModal: React.FC<QuickRepliesModalProps> = ({
         aria-labelledby={modalTitleId}
         tabIndex={-1}
         onKeyDown={onKeyDown}
-        className="bg-white border border-slate-200 w-full max-w-5xl rounded-2xl shadow-2xl flex flex-col max-h-[94vh] overflow-hidden animate-in fade-in zoom-in-95 duration-150 outline-none"
+        className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 w-full max-w-5xl rounded-2xl shadow-2xl flex flex-col max-h-[94vh] overflow-hidden animate-in fade-in zoom-in-95 duration-150 outline-none"
       >
 
         {/* Modal Header */}
-        <div className="p-4 bg-slate-900 text-white flex items-center justify-between border-b border-slate-800 shrink-0">
+        <div className="p-4 bg-slate-900 dark:bg-slate-950 text-white flex items-center justify-between border-b border-slate-800 shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center border border-emerald-500/30">
               <Zap className="w-5 h-5" />
@@ -455,15 +455,15 @@ export const QuickRepliesModal: React.FC<QuickRepliesModalProps> = ({
         <div className="flex-1 flex flex-col md:flex-row overflow-hidden min-h-0">
           
           {/* Left Column: List of Quick Replies with Search & Category Filters */}
-          <div className="w-full md:w-80 bg-slate-50 border-r border-slate-200 flex flex-col shrink-0 overflow-hidden">
+          <div className="w-full md:w-80 bg-slate-50 dark:bg-slate-950/50 border-r border-slate-200 dark:border-slate-800 flex flex-col shrink-0 overflow-hidden">
             
             {/* Action Bar: Create Button & Search */}
-            <div className="p-3 border-b border-slate-200 bg-white space-y-2 shrink-0">
+            <div className="p-3 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 space-y-2 shrink-0">
               <div className="flex items-center justify-between gap-2">
-                <span className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-                  <Zap className="w-3.5 h-3.5 text-emerald-600" />
+                <span className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                  <Zap className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
                   <span>BOTONES DISPONIBLES</span>
-                  <span className="px-1.5 py-0.2 bg-slate-100 text-slate-700 rounded-md font-mono text-[10px]">
+                  <span className="px-1.5 py-0.2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-md font-mono text-[10px]">
                     {items.length}
                   </span>
                 </span>
@@ -486,7 +486,7 @@ export const QuickRepliesModal: React.FC<QuickRepliesModalProps> = ({
                   placeholder="Buscar botones..."
                   value={searchFilter}
                   onChange={(e) => setSearchFilter(e.target.value)}
-                  className="w-full pl-8 pr-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs outline-none focus:ring-1 focus:ring-emerald-500 focus:bg-white text-slate-900"
+                  className="w-full pl-8 pr-2.5 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs outline-none focus:ring-1 focus:ring-emerald-500 focus:bg-white dark:focus:bg-slate-800 text-slate-900 dark:text-slate-100 dark:placeholder:text-slate-500"
                 />
               </div>
 
@@ -502,7 +502,7 @@ export const QuickRepliesModal: React.FC<QuickRepliesModalProps> = ({
                 <button
                   type="button"
                   onClick={() => setCategoryFilter('all')}
-                  className={`px-2 py-0.5 rounded-md font-bold whitespace-nowrap cursor-pointer transition-colors inline-flex items-center gap-1 ${categoryFilter === 'all' ? 'bg-slate-900 text-white shadow-2xs' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+                  className={`px-2 py-0.5 rounded-md font-bold whitespace-nowrap cursor-pointer transition-colors inline-flex items-center gap-1 ${categoryFilter === 'all' ? 'bg-slate-900 text-white shadow-2xs dark:bg-slate-100 dark:text-slate-900' : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700'}`}
                 >
                   <Star className="w-2.5 h-2.5" />
                   Todas
@@ -517,8 +517,8 @@ export const QuickRepliesModal: React.FC<QuickRepliesModalProps> = ({
                       onClick={() => setCategoryFilter(cat.id)}
                       className={`px-2 py-0.5 rounded-md font-bold whitespace-nowrap cursor-pointer transition-colors inline-flex items-center gap-1 ${
                         isCatSelected
-                          ? 'bg-slate-900 text-white shadow-2xs'
-                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                          ? 'bg-slate-900 text-white shadow-2xs dark:bg-slate-100 dark:text-slate-900'
+                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700'
                       }`}
                     >
                       <CategoryIcon className="w-2.5 h-2.5" />
@@ -532,8 +532,8 @@ export const QuickRepliesModal: React.FC<QuickRepliesModalProps> = ({
             {/* List of Items */}
             <div className="flex-1 overflow-y-auto p-2.5 space-y-1.5">
               {filteredItems.length === 0 ? (
-                <div className="p-6 text-center text-slate-400 text-xs">
-                  <p className="font-semibold text-slate-600 mb-1">No hay botones disponibles</p>
+                <div className="p-6 text-center text-slate-400 dark:text-slate-500 text-xs">
+                  <p className="font-semibold text-slate-600 dark:text-slate-300 mb-1">No hay botones disponibles</p>
                   <p className="text-[11px] mb-3">Haz clic en &quot;Nuevo&quot; para crear un botón.</p>
                   <button
                     type="button"
@@ -553,25 +553,25 @@ export const QuickRepliesModal: React.FC<QuickRepliesModalProps> = ({
                       onClick={() => handleSelectItem(item)}
                       className={`p-2.5 rounded-xl border text-xs cursor-pointer transition-all flex items-start justify-between gap-2 group ${
                         isSelected
-                          ? 'bg-white border-emerald-500 ring-2 ring-emerald-500/20 shadow-xs'
-                          : 'bg-white/80 border-slate-200 hover:bg-white hover:border-slate-300'
+                          ? 'bg-white dark:bg-slate-800 border-emerald-500 ring-2 ring-emerald-500/20 shadow-xs'
+                          : 'bg-white/80 dark:bg-slate-900/60 border-slate-200 dark:border-slate-800 hover:bg-white dark:hover:bg-slate-800 hover:border-slate-300 dark:hover:border-slate-600'
                       }`}
                     >
                       <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-1.5 font-bold text-slate-900 text-xs truncate">
+                        <div className="flex items-center gap-1.5 font-bold text-slate-900 dark:text-slate-100 text-xs truncate">
                           <span className="text-sm shrink-0">{item.emoji || '💬'}</span>
                           <span className="truncate">{item.title || `Botón ${idx + 1}`}</span>
                           {item.category && item.category !== 'general' && (
-                            <span className={`px-1.5 py-0.2 text-[9px] font-extrabold uppercase rounded-md shrink-0 ${CATEGORY_COLOR_CLASSES[categoryById.get(item.category)?.color ?? ''] ?? 'bg-slate-100 text-slate-600'}`}>
+                            <span className={`px-1.5 py-0.2 text-[9px] font-extrabold uppercase rounded-md shrink-0 ${CATEGORY_COLOR_CLASSES[categoryById.get(item.category)?.color ?? ''] ?? 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300'}`}>
                               {categoryById.get(item.category)?.label ?? item.category}
                             </span>
                           )}
                         </div>
-                        <p className="text-[11px] text-slate-500 line-clamp-1 mt-0.5 font-normal">
+                        <p className="text-[11px] text-slate-500 dark:text-slate-400 line-clamp-1 mt-0.5 font-normal">
                           {item.text || 'Sin texto'}
                         </p>
                         {item.imageUrl && (
-                          <div className="flex items-center gap-1 text-[10px] text-emerald-700 font-bold mt-1">
+                          <div className="flex items-center gap-1 text-[10px] text-emerald-700 dark:text-emerald-400 font-bold mt-1">
                             <ImageIcon className="w-3 h-3 shrink-0" />
                             <span className="truncate">Incluye imagen</span>
                           </div>
@@ -585,7 +585,7 @@ export const QuickRepliesModal: React.FC<QuickRepliesModalProps> = ({
                           onClick={(e) => handleDuplicateItem(item, e)}
                           title="Duplicar este botón"
                           aria-label="Duplicar este botón"
-                          className="p-1.5 text-slate-400 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition-colors cursor-pointer"
+                          className="p-1.5 text-slate-400 hover:text-emerald-700 dark:hover:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 rounded-lg transition-colors cursor-pointer"
                         >
                           <Copy className="w-3.5 h-3.5" />
                         </button>
@@ -594,7 +594,7 @@ export const QuickRepliesModal: React.FC<QuickRepliesModalProps> = ({
                           onClick={() => setQuickReplyToDelete(item)}
                           title="Borrar este botón permanentemente"
                           aria-label="Borrar este botón permanentemente"
-                          className="p-1.5 text-red-500 hover:text-white bg-red-50 hover:bg-red-600 border border-red-200 hover:border-red-600 rounded-lg transition-all cursor-pointer shadow-2xs"
+                          className="p-1.5 text-red-500 dark:text-red-400 hover:text-white bg-red-50 dark:bg-red-500/15 hover:bg-red-600 border border-red-200 dark:border-red-500/40 hover:border-red-600 rounded-lg transition-all cursor-pointer shadow-2xs"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
@@ -607,13 +607,13 @@ export const QuickRepliesModal: React.FC<QuickRepliesModalProps> = ({
           </div>
 
           {/* Right Column: Editor & Live Preview */}
-          <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-white space-y-4">
+          <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-white dark:bg-slate-900 space-y-4">
             <form onSubmit={handleSaveForm} className="space-y-4">
               
               {/* Top Row: Emoji, Title, Category */}
               <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
                 <div className="sm:col-span-1">
-                  <label className="text-xs font-bold text-slate-700 block mb-1">
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
                     Emoji / Ícono
                   </label>
                   <input
@@ -621,13 +621,13 @@ export const QuickRepliesModal: React.FC<QuickRepliesModalProps> = ({
                     value={activeItem.emoji || ''}
                     onChange={(e) => handleUpdateActiveField('emoji', e.target.value)}
                     placeholder="⚡"
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-base font-bold text-center focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none text-slate-900"
+                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-base font-bold text-center focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none text-slate-900 dark:text-slate-100"
                     maxLength={3}
                   />
                 </div>
 
                 <div className="sm:col-span-2">
-                  <label className="text-xs font-bold text-slate-700 block mb-1">
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
                     Título del Botón (Texto en la barra del chat)
                   </label>
                   <input
@@ -637,17 +637,17 @@ export const QuickRepliesModal: React.FC<QuickRepliesModalProps> = ({
                     value={activeItem.title}
                     onChange={(e) => handleUpdateActiveField('title', e.target.value)}
                     placeholder="Ej. Saludo WhatsApp, Catálogo & Precios, Link Extensión..."
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-900 focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none"
+                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-semibold text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none"
                   />
                 </div>
 
                 <div className="sm:col-span-1">
                   <div className="flex items-center justify-between gap-1 mb-1">
-                    <label htmlFor={`${modalTitleId}-category`} className="text-xs font-bold text-slate-700">Categoría</label>
+                    <label htmlFor={`${modalTitleId}-category`} className="text-xs font-bold text-slate-700 dark:text-slate-300">Categoría</label>
                     <button
                       type="button"
                       onClick={() => setIsCategoryManagerOpen(true)}
-                      className="text-[10px] font-bold text-emerald-700 hover:text-emerald-800 inline-flex items-center gap-1 cursor-pointer"
+                      className="text-[10px] font-bold text-emerald-700 dark:text-emerald-400 hover:text-emerald-800 dark:hover:text-emerald-300 inline-flex items-center gap-1 cursor-pointer"
                       title="Administrar categorías"
                     >
                       <Settings2 className="w-3 h-3" />
@@ -659,47 +659,47 @@ export const QuickRepliesModal: React.FC<QuickRepliesModalProps> = ({
                     value={activeItem.category || defaultCategoryId}
                     onChange={(e) => handleUpdateActiveField('category', e.target.value)}
                     disabled={categories.length === 0}
-                    className="w-full px-2.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none"
+                    className="w-full px-2.5 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none"
                   >
                     {categories.map((category) => <option key={category.id} value={category.id}>{category.label}</option>)}
                   </select>
-                  {categoriesError && <p role="alert" className="mt-1 text-[10px] text-red-600">{categoriesError}</p>}
+                  {categoriesError && <p role="alert" className="mt-1 text-[10px] text-red-600 dark:text-red-400">{categoriesError}</p>}
                 </div>
               </div>
 
               {/* Message Text Area with Variable Tags */}
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between flex-wrap gap-1">
-                  <label className="text-xs font-bold text-slate-700">
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
                     Mensaje a Enviar por WhatsApp / Chat
                   </label>
-                  <div className="flex items-center gap-1 text-[10px] text-slate-500">
+                  <div className="flex items-center gap-1 text-[10px] text-slate-500 dark:text-slate-400">
                     <span>Insertar variable:</span>
                     <button
                       type="button"
                       onClick={() => handleInsertVariable('{nombre}')}
-                      className="px-1.5 py-0.5 bg-slate-100 hover:bg-emerald-50 hover:text-emerald-700 rounded-md text-slate-700 font-mono font-bold cursor-pointer transition-colors"
+                      className="px-1.5 py-0.5 bg-slate-100 dark:bg-slate-800 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 hover:text-emerald-700 dark:hover:text-emerald-400 rounded-md text-slate-700 dark:text-slate-300 font-mono font-bold cursor-pointer transition-colors"
                     >
                       {'{nombre}'}
                     </button>
                     <button
                       type="button"
                       onClick={() => handleInsertVariable('{empresa}')}
-                      className="px-1.5 py-0.5 bg-slate-100 hover:bg-emerald-50 hover:text-emerald-700 rounded-md text-slate-700 font-mono font-bold cursor-pointer transition-colors"
+                      className="px-1.5 py-0.5 bg-slate-100 dark:bg-slate-800 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 hover:text-emerald-700 dark:hover:text-emerald-400 rounded-md text-slate-700 dark:text-slate-300 font-mono font-bold cursor-pointer transition-colors"
                     >
                       {'{empresa}'}
                     </button>
                     <button
                       type="button"
                       onClick={() => handleInsertVariable('{canal}')}
-                      className="px-1.5 py-0.5 bg-slate-100 hover:bg-emerald-50 hover:text-emerald-700 rounded-md text-slate-700 font-mono font-bold cursor-pointer transition-colors"
+                      className="px-1.5 py-0.5 bg-slate-100 dark:bg-slate-800 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 hover:text-emerald-700 dark:hover:text-emerald-400 rounded-md text-slate-700 dark:text-slate-300 font-mono font-bold cursor-pointer transition-colors"
                     >
                       {'{canal}'}
                     </button>
                     <button
                       type="button"
                       onClick={() => handleInsertVariable('{agente}')}
-                      className="px-1.5 py-0.5 bg-slate-100 hover:bg-emerald-50 hover:text-emerald-700 rounded-md text-slate-700 font-mono font-bold cursor-pointer transition-colors"
+                      className="px-1.5 py-0.5 bg-slate-100 dark:bg-slate-800 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 hover:text-emerald-700 dark:hover:text-emerald-400 rounded-md text-slate-700 dark:text-slate-300 font-mono font-bold cursor-pointer transition-colors"
                     >
                       {'{agente}'}
                     </button>
@@ -712,15 +712,15 @@ export const QuickRepliesModal: React.FC<QuickRepliesModalProps> = ({
                   value={activeItem.text}
                   onChange={(e) => handleUpdateActiveField('text', e.target.value)}
                   placeholder="Escribe el texto del mensaje..."
-                  className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none leading-relaxed"
+                  className="w-full p-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500 focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none leading-relaxed"
                 />
               </div>
 
               {/* Image URL / Attachment Section & Preset Management */}
-              <div className="space-y-3 p-3.5 bg-slate-50 border border-slate-200 rounded-xl">
+              <div className="space-y-3 p-3.5 bg-slate-50 dark:bg-slate-950/40 border border-slate-200 dark:border-slate-800 rounded-xl">
                 <div className="flex items-center justify-between">
-                  <label className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
-                    <ImageIcon className="w-4 h-4 text-emerald-600" />
+                  <label className="text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                    <ImageIcon className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
                     <span>Imagen Adjunta (Opcional - Envía texto + imagen)</span>
                   </label>
                   
@@ -730,7 +730,7 @@ export const QuickRepliesModal: React.FC<QuickRepliesModalProps> = ({
                       <button
                         type="button"
                         onClick={handleRemoveImageFromMessage}
-                        className="text-[11px] text-red-600 hover:text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 px-2 py-0.5 rounded-md font-bold cursor-pointer flex items-center gap-1 transition-colors"
+                        className="text-[11px] text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 bg-red-50 dark:bg-red-500/15 hover:bg-red-100 dark:hover:bg-red-500/25 border border-red-200 dark:border-red-500/40 px-2 py-0.5 rounded-md font-bold cursor-pointer flex items-center gap-1 transition-colors"
                       >
                         <Trash2 className="w-3 h-3" />
                         <span>Quitar imagen</span>
@@ -743,7 +743,7 @@ export const QuickRepliesModal: React.FC<QuickRepliesModalProps> = ({
                         type="button"
                         onClick={handleRestoreImageToMessage}
                         title="Recuperar la imagen que acabas de quitar"
-                        className="text-[11px] text-blue-700 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 border border-blue-200 px-2 py-0.5 rounded-md font-bold cursor-pointer flex items-center gap-1 transition-colors animate-in fade-in duration-150"
+                        className="text-[11px] text-blue-700 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 bg-blue-50 dark:bg-blue-500/15 hover:bg-blue-100 dark:hover:bg-blue-500/25 border border-blue-200 dark:border-blue-500/40 px-2 py-0.5 rounded-md font-bold cursor-pointer flex items-center gap-1 transition-colors animate-in fade-in duration-150"
                       >
                         <Undo2 className="w-3 h-3" />
                         <span>Restablecer imagen</span>
@@ -756,10 +756,10 @@ export const QuickRepliesModal: React.FC<QuickRepliesModalProps> = ({
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-1.5">
-                      <span className="text-[10px] font-bold text-slate-600 uppercase tracking-wider">
+                      <span className="text-[10px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider">
                         Galería de imágenes para plantillas:
                       </span>
-                      <span className="px-1.5 py-0.5 bg-slate-200 text-slate-700 text-[10px] font-extrabold rounded-md">
+                      <span className="px-1.5 py-0.5 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 text-[10px] font-extrabold rounded-md">
                         {presetImages.length}
                       </span>
                     </div>
@@ -770,7 +770,7 @@ export const QuickRepliesModal: React.FC<QuickRepliesModalProps> = ({
                       onClick={() => setShowAddImagePanel(!showAddImagePanel)}
                       className={`px-2.5 py-1 text-[11px] font-bold rounded-lg flex items-center gap-1.5 transition-all shadow-2xs cursor-pointer ${
                         showAddImagePanel
-                          ? 'bg-slate-800 text-white'
+                          ? 'bg-slate-800 dark:bg-slate-700 text-white'
                           : 'bg-emerald-600 hover:bg-emerald-700 text-white'
                       }`}
                     >
@@ -790,22 +790,22 @@ export const QuickRepliesModal: React.FC<QuickRepliesModalProps> = ({
 
                   {/* Panel de Ingreso de Nueva Imagen a la Galería */}
                   {showAddImagePanel && (
-                    <div className="p-3.5 bg-white border-2 border-emerald-500/40 rounded-xl shadow-xs space-y-3 animate-in fade-in slide-in-from-top-2 duration-150">
-                      <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-                        <div className="flex items-center gap-1.5 font-bold text-xs text-slate-800">
-                          <UploadCloud className="w-4 h-4 text-emerald-600" />
+                    <div className="p-3.5 bg-white dark:bg-slate-800/60 border-2 border-emerald-500/40 rounded-xl shadow-xs space-y-3 animate-in fade-in slide-in-from-top-2 duration-150">
+                      <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-700 pb-2">
+                        <div className="flex items-center gap-1.5 font-bold text-xs text-slate-800 dark:text-slate-200">
+                          <UploadCloud className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
                           <span>Ingresar Nueva Imagen a la Galería</span>
                         </div>
                         
                         {/* Selector Subir vs URL */}
-                        <div className="flex items-center bg-slate-100 p-0.5 rounded-lg text-[11px]">
+                        <div className="flex items-center bg-slate-100 dark:bg-slate-900/60 p-0.5 rounded-lg text-[11px]">
                           <button
                             type="button"
                             onClick={() => setNewImageInputType('upload')}
                             className={`px-2 py-0.5 rounded-md font-bold transition-colors cursor-pointer ${
                               newImageInputType === 'upload'
-                                ? 'bg-white text-emerald-700 shadow-2xs'
-                                : 'text-slate-600 hover:text-slate-900'
+                                ? 'bg-white dark:bg-slate-700 text-emerald-700 dark:text-emerald-300 shadow-2xs'
+                                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
                             }`}
                           >
                             Subir Archivo
@@ -815,8 +815,8 @@ export const QuickRepliesModal: React.FC<QuickRepliesModalProps> = ({
                             onClick={() => setNewImageInputType('url')}
                             className={`px-2 py-0.5 rounded-md font-bold transition-colors cursor-pointer ${
                               newImageInputType === 'url'
-                                ? 'bg-white text-emerald-700 shadow-2xs'
-                                : 'text-slate-600 hover:text-slate-900'
+                                ? 'bg-white dark:bg-slate-700 text-emerald-700 dark:text-emerald-300 shadow-2xs'
+                                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
                             }`}
                           >
                             Enlace / URL
@@ -825,7 +825,7 @@ export const QuickRepliesModal: React.FC<QuickRepliesModalProps> = ({
                       </div>
 
                       {imageUploadError && (
-                        <div className="p-2 bg-red-50 border border-red-200 rounded-lg text-xs text-red-700 flex items-center gap-1.5">
+                        <div className="p-2 bg-red-50 dark:bg-red-500/15 border border-red-200 dark:border-red-500/40 rounded-lg text-xs text-red-700 dark:text-red-300 flex items-center gap-1.5">
                           <AlertCircle className="w-3.5 h-3.5 shrink-0" />
                           <span>{imageUploadError}</span>
                         </div>
@@ -835,7 +835,7 @@ export const QuickRepliesModal: React.FC<QuickRepliesModalProps> = ({
                         {/* Left: Input File / URL */}
                         <div className="sm:col-span-2 space-y-2">
                           <div>
-                            <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                            <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 block mb-1">
                               Nombre o Etiqueta de la Imagen
                             </label>
                             <input
@@ -843,13 +843,13 @@ export const QuickRepliesModal: React.FC<QuickRepliesModalProps> = ({
                               value={newImageTitle}
                               onChange={(e) => setNewImageTitle(e.target.value)}
                               placeholder="Ej. Menú Parrilla, Oferta Especial, Catálogo 2026..."
-                              className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold text-slate-900 focus:ring-1 focus:ring-emerald-500 outline-none"
+                              className="w-full px-2.5 py-1.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-semibold text-slate-900 dark:text-slate-100 dark:placeholder:text-slate-500 focus:ring-1 focus:ring-emerald-500 outline-none"
                             />
                           </div>
 
                           {newImageInputType === 'upload' ? (
                             <div>
-                              <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                              <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 block mb-1">
                                 Seleccionar archivo desde la computadora
                               </label>
                               <input
@@ -862,20 +862,20 @@ export const QuickRepliesModal: React.FC<QuickRepliesModalProps> = ({
                               />
                               <div
                                 onClick={() => fileInputRef.current?.click()}
-                                className="border-2 border-dashed border-slate-300 hover:border-emerald-500 bg-slate-50 hover:bg-emerald-50/30 rounded-xl p-3 text-center cursor-pointer transition-colors"
+                                className="border-2 border-dashed border-slate-300 dark:border-slate-600 hover:border-emerald-500 bg-slate-50 dark:bg-slate-900/40 hover:bg-emerald-50/30 dark:hover:bg-emerald-500/10 rounded-xl p-3 text-center cursor-pointer transition-colors"
                               >
-                                <FolderOpen className="w-5 h-5 text-emerald-600 mx-auto mb-1" />
-                                <p className="text-xs font-bold text-slate-800">
+                                <FolderOpen className="w-5 h-5 text-emerald-600 dark:text-emerald-400 mx-auto mb-1" />
+                                <p className="text-xs font-bold text-slate-800 dark:text-slate-200">
                                   {newImagePreview ? 'Cambiar archivo seleccionado' : 'Haz clic para explorar imágenes'}
                                 </p>
-                                <p className="text-[10px] text-slate-500 mt-0.5">
+                                <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">
                                   Formatos JPG, PNG, WEBP, GIF
                                 </p>
                               </div>
                             </div>
                           ) : (
                             <div>
-                              <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                              <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 block mb-1">
                                 URL directa de la imagen
                               </label>
                               <input
@@ -887,26 +887,26 @@ export const QuickRepliesModal: React.FC<QuickRepliesModalProps> = ({
                                   setNewImagePreview(e.target.value);
                                 }}
                                 placeholder="https://miweb.com/imagen.jpg"
-                                className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-mono text-slate-900 focus:ring-1 focus:ring-emerald-500 outline-none"
+                                className="w-full px-2.5 py-1.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-mono text-slate-900 dark:text-slate-100 dark:placeholder:text-slate-500 focus:ring-1 focus:ring-emerald-500 outline-none"
                               />
                             </div>
                           )}
                         </div>
 
                         {/* Right: Instant Thumbnail Preview */}
-                        <div className="border border-slate-200 rounded-xl p-2 bg-slate-50 text-center">
-                          <span className="text-[10px] font-bold text-slate-500 block mb-1">
+                        <div className="border border-slate-200 dark:border-slate-700 rounded-xl p-2 bg-slate-50 dark:bg-slate-900/40 text-center">
+                          <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 block mb-1">
                             Vista Previa
                           </span>
                           {newImagePreview ? (
                             <img
                               src={newImagePreview}
                               alt="Preview"
-                              className="w-full h-20 object-cover rounded-lg border border-slate-200 shadow-2xs"
+                              className="w-full h-20 object-cover rounded-lg border border-slate-200 dark:border-slate-700 shadow-2xs"
                               onError={() => setImageUploadError('No se pudo cargar la imagen desde la URL provista.')}
                             />
                           ) : (
-                            <div className="w-full h-20 rounded-lg border border-dashed border-slate-300 flex flex-col items-center justify-center text-slate-400">
+                            <div className="w-full h-20 rounded-lg border border-dashed border-slate-300 dark:border-slate-600 flex flex-col items-center justify-center text-slate-400 dark:text-slate-500">
                               <ImageIcon className="w-5 h-5 mb-0.5" />
                               <span className="text-[10px]">Sin imagen</span>
                             </div>
@@ -915,14 +915,14 @@ export const QuickRepliesModal: React.FC<QuickRepliesModalProps> = ({
                       </div>
 
                       {/* Action buttons */}
-                      <div className="flex items-center justify-end gap-2 pt-1 border-t border-slate-100">
+                      <div className="flex items-center justify-end gap-2 pt-1 border-t border-slate-100 dark:border-slate-700">
                         <button
                           type="button"
                           onClick={() => {
                             setShowAddImagePanel(false);
                             setImageUploadError('');
                           }}
-                          className="px-3 py-1.5 text-xs text-slate-600 hover:text-slate-800 font-bold rounded-lg cursor-pointer"
+                          className="px-3 py-1.5 text-xs text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 font-bold rounded-lg cursor-pointer"
                         >
                           Cancelar
                         </button>
@@ -941,8 +941,8 @@ export const QuickRepliesModal: React.FC<QuickRepliesModalProps> = ({
 
                   {/* Preset Images Grid with Delete Button on Each Card */}
                   {presetImages.length === 0 ? (
-                    <div className="p-4 border border-dashed border-slate-300 rounded-xl text-center bg-slate-50">
-                      <p className="text-xs text-slate-500 font-medium">
+                    <div className="p-4 border border-dashed border-slate-300 dark:border-slate-600 rounded-xl text-center bg-slate-50 dark:bg-slate-900/40">
+                      <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
                         No hay imágenes en la galería predeterminada.
                       </p>
                       <button
@@ -966,12 +966,12 @@ export const QuickRepliesModal: React.FC<QuickRepliesModalProps> = ({
                             }}
                             className={`group relative p-1.5 border rounded-xl text-left transition-all cursor-pointer select-none ${
                               isSelected
-                                ? 'border-emerald-500 bg-emerald-50 ring-2 ring-emerald-500 shadow-xs'
-                                : 'border-slate-200 bg-white hover:border-slate-300 hover:shadow-2xs'
+                                ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-500/15 ring-2 ring-emerald-500 shadow-xs'
+                                : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900/40 hover:border-slate-300 dark:hover:border-slate-500 hover:shadow-2xs'
                             }`}
                           >
                             {/* Image Thumbnail */}
-                            <div className="relative w-full h-14 rounded-lg overflow-hidden bg-slate-100 mb-1.5 flex items-center justify-center">
+                            <div className="relative w-full h-14 rounded-lg overflow-hidden bg-slate-100 dark:bg-slate-800 mb-1.5 flex items-center justify-center">
                               <img
                                 key={preset.url}
                                 src={preset.url}
@@ -999,10 +999,10 @@ export const QuickRepliesModal: React.FC<QuickRepliesModalProps> = ({
                               </button>
                             </div>
 
-                            <p className="text-[11px] font-bold text-slate-800 truncate leading-tight">
+                            <p className="text-[11px] font-bold text-slate-800 dark:text-slate-200 truncate leading-tight">
                               {preset.name}
                             </p>
-                            <p className="text-[9px] text-slate-400 truncate mt-0.5">
+                            <p className="text-[9px] text-slate-400 dark:text-slate-500 truncate mt-0.5">
                               {preset.type || 'Personalizada'}
                             </p>
                           </div>
@@ -1016,19 +1016,19 @@ export const QuickRepliesModal: React.FC<QuickRepliesModalProps> = ({
               {/* Live Preview in WhatsApp Style */}
               <div className="space-y-1.5 pt-1">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
-                    <Eye className="w-3.5 h-3.5 text-emerald-600" />
+                  <span className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                    <Eye className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
                     <span>Vista Previa del Mensaje en WhatsApp Web:</span>
                   </span>
                   {activeItem.imageUrl && (
-                    <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md flex items-center gap-1">
+                    <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-500/15 border border-emerald-200 dark:border-emerald-500/40 px-2 py-0.5 rounded-md flex items-center gap-1">
                       <ImageIcon className="w-3 h-3" />
                       <span>1 Imagen Adjunta</span>
                     </span>
                   )}
                 </div>
 
-                <div className="p-4 bg-[#efeae2]/80 rounded-xl border border-slate-200 flex justify-end">
+                <div className="p-4 bg-[#efeae2]/80 dark:bg-slate-950/60 rounded-xl border border-slate-200 dark:border-slate-800 flex justify-end">
                   <div className="max-w-md w-full sm:w-auto min-w-[260px] bg-[#dcf8c6] text-slate-900 rounded-2xl rounded-tr-xs p-3 text-xs shadow-xs border border-emerald-200/80 space-y-2">
                     {Boolean(activeItem.imageUrl) && (
                       <div className="rounded-xl overflow-hidden border border-emerald-300/50 bg-black/5 shadow-2xs">
@@ -1059,21 +1059,21 @@ export const QuickRepliesModal: React.FC<QuickRepliesModalProps> = ({
               </div>
 
               {/* Action Buttons */}
-              <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-100 shrink-0">
+              <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-100 dark:border-slate-700 shrink-0">
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
                     onClick={() => setQuickReplyToDelete(activeItem)}
                     title="Eliminar este botón"
-                    className="px-3 py-2 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5"
+                    className="px-3 py-2 bg-red-50 dark:bg-red-500/15 hover:bg-red-100 dark:hover:bg-red-500/25 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-500/40 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5"
                   >
-                    <Trash2 className="w-3.5 h-3.5 text-red-600" />
+                    <Trash2 className="w-3.5 h-3.5 text-red-600 dark:text-red-400" />
                     <span>Borrar Botón</span>
                   </button>
 
                   {saveSuccessMessage && (
-                    <span className="text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-xl inline-flex items-center gap-1.5 animate-in fade-in">
-                      <CheckCheck className="w-4 h-4 stroke-2 text-emerald-600" />
+                    <span className="text-xs font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-500/15 border border-emerald-200 dark:border-emerald-500/40 px-3 py-1.5 rounded-xl inline-flex items-center gap-1.5 animate-in fade-in">
+                      <CheckCheck className="w-4 h-4 stroke-2 text-emerald-600 dark:text-emerald-400" />
                       <span>{saveSuccessMessage}</span>
                     </span>
                   )}
@@ -1083,7 +1083,7 @@ export const QuickRepliesModal: React.FC<QuickRepliesModalProps> = ({
                   <button
                     type="button"
                     onClick={onClose}
-                    className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition-all cursor-pointer"
+                    className="px-4 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold rounded-xl text-xs transition-all cursor-pointer"
                   >
                     Cerrar
                   </button>
@@ -1137,13 +1137,13 @@ export const QuickRepliesModal: React.FC<QuickRepliesModalProps> = ({
         }
       >
         <div className="space-y-3">
-          <p className="text-md text-black">
+          <p className="text-md text-black dark:text-slate-100">
             ¿Estás seguro de que deseas eliminar la respuesta rápida?
           </p>
 
           {quickReplyToDelete && (
-            <div className="p-3 bg-red-50 border border-red-200 rounded-xl">
-              <p className="text-md font-extrabold text-red-800">
+            <div className="p-3 bg-red-50 dark:bg-red-500/15 border border-red-200 dark:border-red-500/40 rounded-xl">
+              <p className="text-md font-extrabold text-red-800 dark:text-red-300">
                 {quickReplyToDelete.title}
               </p>
             </div>
@@ -1179,7 +1179,7 @@ export const QuickRepliesModal: React.FC<QuickRepliesModalProps> = ({
         }
       >
         <div className="space-y-3">
-          <p className="text-md text-black">
+          <p className="text-md text-black dark:text-slate-100">
             ¿Estás seguro de que deseas reestablecer las respuestas por defecto? <br></br> <br></br>
             Se conservarán las imágenes de la galería
           </p>
