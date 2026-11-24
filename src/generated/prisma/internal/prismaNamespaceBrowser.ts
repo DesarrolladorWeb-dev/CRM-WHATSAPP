@@ -137,6 +137,7 @@ export const ContactScalarFieldEnum = {
   phone: 'phone',
   email: 'email',
   channel: 'channel',
+  origin: 'origin',
   sentiment: 'sentiment',
   leadScore: 'leadScore',
   stage: 'stage',

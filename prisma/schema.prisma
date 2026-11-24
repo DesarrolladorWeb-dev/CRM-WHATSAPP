@@ -81,6 +81,7 @@ model Contact {
   phone         String?
   email         String?
   channel       String              @default("whatsapp")
+  origin        String?
   sentiment     String              @default("neutral")
   leadScore     Int                 @default(50) @map("lead_score")
   stage         String              @default("lead")
@@ -104,6 +105,7 @@ model Contact {
   campaignSends CampaignRecipient[]
 
   @@index([channel])
+  @@index([origin])
   @@index([stage])
   @@map("contacts")
 }

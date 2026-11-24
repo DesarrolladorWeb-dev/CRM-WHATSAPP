@@ -179,6 +179,10 @@ export interface ReceivedWhatsAppMessage {
   hasMedia?: boolean;
   mediaType?: MediaType;
   media?: MediaData;
+  // El servicio puede mandar el binario ya servido por URL (stickers, media
+  // que no viaja en base64). Antes se ignoraba en los entrantes y la burbuja
+  // quedaba vacia aunque el mensaje tuviera multimedia.
+  mediaUrl?: string;
   receivedAt?: string;
   rawMessage?: any;
 }
@@ -187,6 +191,7 @@ export interface SendMediaOptions {
   phone: string;
   type: MediaType;
   media: string;
+  conversationId?: string;
   caption?: string;
   filename?: string;
   mimetype?: string;
@@ -209,10 +214,12 @@ type ServiceBody<T> = { success: boolean } & T;
 type Req<T> = { ok: boolean; data: ServiceBody<T> | null; error?: string; status?: number };
 
 /** Hace una peticion al servicio y nunca lanza: devuelve un resultado explicito. */
-async function request<T>(path: string, init?: RequestInit): Promise<Req<T>> {
+async function request<T>(path: string, init?: RequestInit, browserPath?: string): Promise<Req<T>> {
   try {
     const isServer = typeof window === 'undefined';
-    const target = isServer ? `${SERVICE_URL}${path}` : path.replace('/api/whatsapp/', '/api/wa-bridge/');
+    const target = isServer
+      ? `${SERVICE_URL}${path}`
+      : browserPath ?? path.replace('/api/whatsapp/', '/api/wa-bridge/');
     const secretHeader = isServer && process.env.WHATSAPP_SERVICE_SECRET
       ? { 'x-service-secret': process.env.WHATSAPP_SERVICE_SECRET }
       : {};
@@ -302,24 +309,36 @@ export function sendProductInfo(
   );
 }
 
+type SendMediaResult = {
+  messageId?: string;
+  chatId?: string;
+  timestamp?: number;
+  historyMessageId?: string | null;
+};
+
 /** POST /api/whatsapp/send-media (envía imágenes, audios, videos, documentos y stickers). */
 export function sendMediaMessage(
   opts: SendMediaOptions
-): Promise<AsService<{ messageId?: string; chatId?: string; timestamp?: number }>> {
+): Promise<AsService<SendMediaResult>> {
   const jidToSend = getJidForSending(opts.phone);
+  const path = '/api/whatsapp/send-media';
+  // Los adjuntos que el CRM guarda al enviar requieren la conversación.
+  const guardaHistorial = opts.type === 'image' || opts.type === 'document';
+  const browserPath = guardaHistorial && opts.conversationId ? path : undefined;
 
-  return unwrap<{ messageId?: string; chatId?: string; timestamp?: number }>(
-    request<{ messageId?: string; chatId?: string; timestamp?: number }>('/api/whatsapp/send-media', {
+  return unwrap(
+    request<SendMediaResult>(path, {
       method: 'POST',
       body: JSON.stringify({
         phone: jidToSend,
         type: opts.type,
         media: opts.media,
+        conversationId: opts.conversationId,
         caption: opts.caption,
         filename: opts.filename,
         mimetype: opts.mimetype,
       }),
-    })
+    }, browserPath)
   );
 }
 

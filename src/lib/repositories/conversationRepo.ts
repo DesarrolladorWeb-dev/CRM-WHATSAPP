@@ -3,7 +3,12 @@ import type { Conversation } from '@/types';
 
 // La app recibe la conversacion sin el objeto `contact` embebido: page.tsx lo
 // enlaza desde la lista de contactos usando contactId.
-type ApiConversation = Omit<Conversation, 'contact'> & { createdAt?: Date; updatedAt?: Date };
+// `updatedAt` se omite del tipo base a proposito: en la API viaja como `Date`
+// y Next lo serializa a ISO en la respuesta (el cliente lo ve como string).
+type ApiConversation = Omit<Conversation, 'contact' | 'updatedAt'> & {
+  createdAt?: Date;
+  updatedAt?: Date;
+};
 
 function toApiConversation(row: ConversationRow): ApiConversation {
   return {

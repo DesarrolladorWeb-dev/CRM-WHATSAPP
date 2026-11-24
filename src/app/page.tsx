@@ -52,19 +52,15 @@ import { LoginView } from '@/components/Login/LoginView';
 import { User } from '../generated/prisma/client';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { InteractiveContent, interactiveToText, parseInteractive } from '@/lib/whatsappInteractive';
+import { originFromMessage } from '@/lib/contactOrigin';
+import { upsertConversationInList } from '@/lib/conversationList';
+import {
+  getMessageEventDate,
+  mergeMessagesChronologically,
+  sortMessagesChronologically,
+} from '@/lib/messageOrdering';
 
 const LOCAL_STORAGE_QUICK_REPLIES_KEY = 'whato_crm_quick_replies_v2';
-
-function dedupeMessages(messages: Message[]): Message[] {
-  const seen = new Set<string>();
-  const out: Message[] = [];
-  for (const m of messages) {
-    if (seen.has(m.id)) continue;
-    seen.add(m.id);
-    out.push(m);
-  }
-  return out;
-}
 
 function getMediaLabel(mediaType?: string): string {
   switch (mediaType) {
@@ -80,6 +76,29 @@ function getMediaLabel(mediaType?: string): string {
 // Suscripción vacía para useSyncExternalStore: solo interesa distinguir
 // servidor/hidratación (false) de cliente ya montado (true).
 const subscribeNoop = () => () => { };
+
+/**
+ * Contacto mínimo para que una conversación de la base siga siendo visible
+ * cuando /api/contacts falla. Sin esto el chat desaparecía hasta refrescar.
+ */
+function contactoPlaceholder(conv: Conversation): Contact {
+  return {
+    id: conv.contactId,
+    name: 'Contacto WhatsApp',
+    avatar: avatarPara(conv.contactId, false),
+    handle: '',
+    phone: '',
+    channel: conv.channel,
+    tags: [],
+    sentiment: 'neutral',
+    leadScore: 0,
+    stage: 'lead',
+    dealValue: 0,
+    notes: '',
+    lastActive: 'Ahora',
+    company: '',
+  };
+}
 
 export default function HomePage() {
   const router = useRouter()
@@ -232,7 +251,7 @@ export default function HomePage() {
     }
   }
 
-  // Client-side hydration and DB sync
+  // Client-side hydration
   useEffect(() => {
 
     const checkUser = async () => {
@@ -261,101 +280,154 @@ export default function HomePage() {
     }
 
     checkUser()
+  }, []);
 
-    // Try fetching live data from MongoDB API endpoints
+  // Datos de la base (Postgres + Mongo). Depende de `currentUser` a proposito:
+  // antes corria una sola vez al montar, mientras la sesion aun no estaba
+  // resuelta, asi que las peticiones podian volver 401 y el inbox se quedaba
+  // con los mocks hasta refrescar la pagina. Con la sesion como dependencia se
+  // ejecuta solo con sesion y se repite al hacer login.
+  useEffect(() => {
+    if (!currentUser) return;
+    let cancelled = false;
+
+    // Cada endpoint se resuelve por separado: un `.json()` que falle en UNA
+    // respuesta devuelve null y no aborta el resto, y los 5xx / fallos de red
+    // se reintentan con backoff (500 ms, 1 s).
+    type DbBody = { success?: boolean; data?: unknown; error?: string } | null;
+    const getJson = async (url: string): Promise<{ ok: boolean; status: number; body: DbBody }> => {
+      const maxIntentos = 3;
+      let status = 0;
+      for (let intento = 0; intento < maxIntentos; intento++) {
+        if (cancelled) return { ok: false, status, body: null };
+        try {
+          const res = await apiFetch(url);
+          const body = await res.json().catch(() => null);
+          // Un 4xx es definitivo (sin sesion, sin permisos...): reintentarlo
+          // solo retrasa el resto de peticiones.
+          if (res.ok || res.status < 500) return { ok: res.ok, status: res.status, body };
+          status = res.status;
+        } catch {
+          status = 0;
+        }
+        if (intento < maxIntentos - 1) {
+          await new Promise(resolve => setTimeout(resolve, 500 * 2 ** intento));
+        }
+      }
+      return { ok: false, status, body: null };
+    };
+
     const fetchDbData = async () => {
-      try {
-        const [cRes, convRes, segRes, campRes, autoRes, analyticsRes, meRes, qrRes] = await Promise.all([
-          apiFetch('/api/contacts'),
-          apiFetch('/api/conversations'),
-          apiFetch('/api/segments'),
-          apiFetch('/api/campaigns'),
-          apiFetch('/api/automations'),
-          apiFetch('/api/analytics'),
-          apiFetch('/api/auth/me'),
-          apiFetch('/api/quick-replies'),
-        ]);
+      const [cRes, convRes, segRes, campRes, autoRes, analyticsRes, meRes, qrRes] = await Promise.all([
+        getJson('/api/contacts'),
+        getJson('/api/conversations'),
+        getJson('/api/segments'),
+        getJson('/api/campaigns'),
+        getJson('/api/automations'),
+        getJson('/api/analytics'),
+        getJson('/api/auth/me'),
+        getJson('/api/quick-replies'),
+      ]);
+      if (cancelled) return;
 
-        const dataDown = [cRes, convRes, segRes, campRes, autoRes, analyticsRes].some(r => r.status >= 500);
-        if (dataDown) setDbDegraded(true);
+      const dataDown = [cRes, convRes, segRes, campRes, autoRes, analyticsRes]
+        .some(r => r.status >= 500 || r.status === 0);
+      if (dataDown) setDbDegraded(true);
 
-        // Este efecto solo corre al montar: el estado de contactos aún es el inicial.
-        let latestContacts = INITIAL_CONTACTS;
-        if (cRes.ok) {
-          const cData = await cRes.json();
-          if (cData.success && Array.isArray(cData.data) && cData.data.length > 0) {
-            latestContacts = cData.data;
-            setContacts(cData.data);
-          }
+      let latestContacts: Contact[] | null = null;
+      if (cRes.ok) {
+        const cData = cRes.body;
+        if (cData?.success && Array.isArray(cData.data) && cData.data.length > 0) {
+          latestContacts = cData.data as Contact[];
+          setContacts(latestContacts);
         }
-        if (convRes.ok) {
-          const convData = await convRes.json();
-          if (convData.success && Array.isArray(convData.data) && convData.data.length > 0) {
+      }
+      if (convRes.ok) {
+        const convData = convRes.body;
+        if (convData?.success && Array.isArray(convData.data) && convData.data.length > 0) {
 
-            const contactById = new Map(latestContacts.map(c => [c.id, c]));
-            const hydrated = convData.data
-              .map((conv: Conversation) => ({ ...conv, contact: conv.contact || contactById.get(conv.contactId) }))
-              .filter((conv: Conversation) => !!conv.contact);
-            if (hydrated.length > 0) {
-              setConversations(hydrated);
-              // Sin ?id= en la URL nadie elegía conversación y el panel mostraba
-              // los mocks hasta el primer clic: se abre la más reciente.
-              if (!searchParams.get('id')) {
-                setActiveConversationId(hydrated[0].id);
-                const params = new URLSearchParams(searchParams.toString());
-                params.set('id', hydrated[0].id);
-                router.replace(`${pathname}?${params.toString()}`);
-              }
+          // Si /api/contacts fallo, `latestContacts` es null: NO se descartan
+          // las conversaciones por no poder enlazar su contacto. Se reutiliza
+          // el contacto que ya tuvieramos en memoria y, si tampoco, uno mínimo.
+          const contactById = new Map<string, Contact>(
+            [...INITIAL_CONTACTS, ...(latestContacts ?? [])].map(c => [c.id, c])
+          );
+          const contactosPrevios = new Map(
+            conversationsRef.current.map(c => [c.id, c.contact])
+          );
+          const hydrated = (convData.data as Conversation[])
+            .map((conv: Conversation) => ({
+              ...conv,
+              contact:
+                conv.contact ||
+                contactById.get(conv.contactId) ||
+                contactosPrevios.get(conv.id) ||
+                contactoPlaceholder(conv),
+            }));
+          if (hydrated.length > 0) {
+            setConversations(hydrated);
+            // Sin ?id= en la URL nadie elegía conversación y el panel mostraba
+            // los mocks hasta el primer clic: se abre la más reciente.
+            if (!searchParams.get('id')) {
+              setActiveConversationId(hydrated[0].id);
+              const params = new URLSearchParams(searchParams.toString());
+              params.set('id', hydrated[0].id);
+              router.replace(`${pathname}?${params.toString()}`);
             }
           }
         }
-        if (segRes.ok) {
-          const segData = await segRes.json();
-          if (segData.success && Array.isArray(segData.data) && segData.data.length > 0) {
-            setSegments(segData.data);
-          }
+      }
+      if (segRes.ok) {
+        const segData = segRes.body;
+        if (segData?.success && Array.isArray(segData.data) && segData.data.length > 0) {
+          setSegments(segData.data);
         }
-        if (campRes.ok) {
-          const campData = await campRes.json();
-          if (campData.success && Array.isArray(campData.data) && campData.data.length > 0) {
-            setCampaigns(campData.data);
-          }
+      }
+      if (campRes.ok) {
+        const campData = campRes.body;
+        if (campData?.success && Array.isArray(campData.data) && campData.data.length > 0) {
+          setCampaigns(campData.data);
         }
-        if (autoRes.ok) {
-          const autoData = await autoRes.json();
-          if (autoData.success && Array.isArray(autoData.data) && autoData.data.length > 0) {
-            setAutomations(autoData.data);
-          }
+      }
+      if (autoRes.ok) {
+        const autoData = autoRes.body;
+        if (autoData?.success && Array.isArray(autoData.data) && autoData.data.length > 0) {
+          setAutomations(autoData.data);
         }
-        if (analyticsRes.ok) {
-          const analyticsData = await analyticsRes.json();
-          if (analyticsData.success && analyticsData.data) {
-            setAnalyticsData(analyticsData.data);
-          }
+      }
+      if (analyticsRes.ok) {
+        const analyticsData = analyticsRes.body;
+        if (analyticsData?.success && analyticsData.data) {
+          setAnalyticsData(analyticsData.data as AnalyticsData);
         }
-        if (meRes.ok) {
-          const meData = await meRes.json();
-          // Solo ocultamos el boton si el backend dice explicitamente que NO.
-          if (meData.success) {
-            if (meData.data?.capabilities?.campaigns) {
-              setCanDeleteCampaigns(!!meData.data.capabilities.campaigns.delete);
-            }
-            setCanDeleteContacts(!!meData.data?.capabilities?.contacts?.delete);
+      }
+      if (meRes.ok) {
+        const meData = meRes.body as {
+          success?: boolean;
+          data?: { capabilities?: { campaigns?: { delete?: boolean }; contacts?: { delete?: boolean } } };
+        } | null;
+        // Solo ocultamos el boton si el backend dice explicitamente que NO.
+        if (meData?.success) {
+          if (meData.data?.capabilities?.campaigns) {
+            setCanDeleteCampaigns(!!meData.data.capabilities.campaigns.delete);
           }
+          setCanDeleteContacts(!!meData.data?.capabilities?.contacts?.delete);
         }
-        if (qrRes.ok) {
-          const qrData = await qrRes.json();
+      }
+      if (qrRes.ok) {
+        const qrData = qrRes.body;
 
-          if (qrData.success && Array.isArray(qrData.data) && qrData.data.length > 0) {
-            setQuickReplies(qrData.data);
-          }
+        if (qrData?.success && Array.isArray(qrData.data) && qrData.data.length > 0) {
+          setQuickReplies(qrData.data);
         }
-      } catch {
-        setDbDegraded(true);
       }
     };
     fetchDbData();
-  }, []);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [currentUser]);
 
   useEffect(() => {
     if (!mounted
@@ -387,11 +459,18 @@ export default function HomePage() {
         const data = await res.json();
         if (cancelled || !data.success || !Array.isArray(data.data) || data.data.length === 0) return;
 
-        setMessagesMap(prev => {
-          const fetchedIds = new Set(data.data.map((m: Message) => m.id));
-          const pendingLocal = (prev[convId] || []).filter(m => !fetchedIds.has(m.id));
-          return { ...prev, [convId]: [...data.data, ...pendingLocal] };
-        });
+        setMessagesMap(prev => ({
+          ...prev,
+          // La base va DESPUES para que gane en el merge: la copia en memoria de
+          // un mensaje con multimedia llega sin binario (el socket del servicio
+          // solo manda metadatos) y, si ganaba, tapaba para siempre la version
+          // buena que devuelve /api/messages. Por eso el sticker o la imagen
+          // solo se veian tras recargar.
+          [convId]: mergeMessagesChronologically([
+            ...(prev[convId] || []),
+            ...data.data,
+          ]),
+        }));
       } catch {
         // La conversación mantiene los mensajes que ya tuviera en memoria.
       }
@@ -402,21 +481,31 @@ export default function HomePage() {
     };
   }, [activeConversationId, mounted]);
 
-  const isWhatsappServiceActive = isWhatsappSocketConnected;
-  const visibleConversations = isWhatsappServiceActive
-    ? conversations
-    : conversations.filter(c => c.channel !== 'whatsapp');
+  // Las conversaciones de la base se muestran siempre: que el socket no este
+  // conectado solo afecta al tiempo real, no a lo que ya hay guardado.
+  const visibleConversations = conversations;
 
   const unreadTotal = visibleConversations.reduce((acc, c) => acc + (c.unreadCount || 0), 0);
   // Handle Send Message
-  const handleSendMessage = async (conversationId: string, text: string, aiGenerated: boolean = false,mediaUrl?: string, interactive?: InteractiveContent,mediaType?:'image') => {
+  const handleSendMessage = async (conversationId: string, text: string, aiGenerated: boolean = false,mediaUrl?: string, interactive?: InteractiveContent,mediaType?: Message['mediaType'], filename?: string, mimetype?: string) => {
     const timestamp = formatTime();
     const conv = conversations.find(c => c.id === conversationId);
     if (!conv) return;
 
+    const esImagenAdjunta =
+      !!mediaUrl &&
+      ((mediaType || (mediaUrl.startsWith('data:image/') ? 'image' : undefined)) === 'image');
+    const esAudioSimulado = !!mediaUrl && mediaUrl.startsWith('data:audio/');
+    const esVideo = !!mediaUrl && mediaUrl.startsWith('data:video/');
+    const esDocumentoWhatsApp = conv.channel === 'whatsapp' && !!mediaUrl &&
+      !interactive && (mediaType === 'document' || (!esImagenAdjunta && !esAudioSimulado && !esVideo));
+    const esDocumento = mediaType === 'document' || esDocumentoWhatsApp;
+    const nombreDocumento = esDocumento ? (filename || text.trim() || 'Documento') : undefined;
+
     const newMsg: Message = {
       id: `m_${Date.now()}`,
       conversationId,
+      createdAt: new Date().toISOString(),
       sender: 'agent',
       senderName: 'Asistente XIO',
       text: interactive ? interactive.body : text,
@@ -424,13 +513,17 @@ export default function HomePage() {
       channel: conv.channel,
       status: 'sent',
       aiGenerated,
-      mediaUrl,
+      // Los documentos enviados solo conservan la tarjeta y sus metadatos en
+      // Mongo; el binario de origen no se deja como una descarga en el chat.
+      mediaUrl: esDocumento ? undefined : mediaUrl,
+      hasMedia: !!mediaUrl,
+      mediaType: mediaUrl ? (esDocumento ? 'document' : mediaType || (esImagenAdjunta ? 'image' : undefined)) : undefined,
+      media: mediaUrl && (nombreDocumento || filename)
+        ? { mimetype: mimetype || 'application/octet-stream', data: '', filename: nombreDocumento || filename }
+        : undefined,
       interactive
     };
 
-    const esImagenAdjunta =
-      !!mediaUrl &&
-      (mediaType === 'image' || mediaUrl.startsWith('data:image/'));
     const enviarImagenYTexto = esImagenAdjunta && !!text.trim();
     let textoImagenWhatsAppEnviado = false;
 
@@ -455,8 +548,10 @@ export default function HomePage() {
     // Update Messages Map
     setMessagesMap(prev => ({
       ...prev,
-      [conversationId]: [
-        ...(prev[conversationId] || []),...(enviarImagenYTexto ? [imageMsg, textMsg] : [newMsg] ),]
+      [conversationId]: sortMessagesChronologically([
+        ...(prev[conversationId] || []),
+        ...(enviarImagenYTexto ? [imageMsg, textMsg] : [newMsg]),
+      ]),
     }));
 
     // Update Conversation Last Message
@@ -469,10 +564,15 @@ export default function HomePage() {
             : enviarImagenYTexto
               ? text.trim()
               : mediaUrl
-                ? `📷 ${text || 'Imagen adjunta'}`
+                ? esDocumento
+                  ? `📎 ${text || filename || 'Documento adjunto'}`
+                  : `📷 ${text || 'Imagen adjunta'}`
                 : text,
           lastMessageTime: 'Ahora',
-          unreadCount: 0
+          unreadCount: 0,
+          // La lista etiqueta cada chat con su ultima actividad real, asi que
+          // el objeto en memoria debe reflejarla igual que la base.
+          updatedAt: new Date().toISOString()
         };
       }
       return c;
@@ -493,10 +593,7 @@ export default function HomePage() {
         phone = normalizePhone(conv.contact.phone || conv.contact.handle || '');
       }
 
-      const esAudioSimulado = !!mediaUrl && mediaUrl.startsWith('data:audio/');
       const esImagen = esImagenAdjunta;
-      const esVideo = !!mediaUrl && mediaUrl.startsWith('data:video/');
-      const esDocumento = !!mediaUrl && !esAudioSimulado && !esImagen && !esVideo;
 
       if (interactive) {
         const lid = isLid(conv.contact.handle || '') ? conv.contact.handle!.split('@')[0] : null;
@@ -535,8 +632,27 @@ export default function HomePage() {
         phone,
         type: 'image',
         media: mediaUrl,
+        conversationId,
+        filename,
+        mimetype,
         });
         resultado = resultadoImagen;
+
+        if (resultadoImagen.ok) {
+          const mensaje = enviarImagenYTexto ? imageMsg : newMsg;
+          const idGuardado = resultadoImagen.data.historyMessageId;
+          if (idGuardado) {
+            setMessagesMap(prev => ({
+              ...prev,
+              [conversationId]: mergeMessagesChronologically([
+                { ...mensaje, id: idGuardado },
+                ...(prev[conversationId] || []).filter(msg => msg.id !== mensaje.id),
+              ]),
+            }));
+          } else {
+            setWhatsappError('La imagen se envió por WhatsApp, pero no se pudo guardar en el historial del CRM.');
+          }
+        }
 
         if (!resultadoImagen.ok) {
           mensajeFallidoId = enviarImagenYTexto ? imageMsg.id : newMsg.id;
@@ -559,7 +675,32 @@ export default function HomePage() {
       }
     }
   }
-        else if (esAudioSimulado) {
+        else if (esDocumentoWhatsApp) {
+          const documentoEnviado = await sendMediaMessage({
+            phone,
+            type: 'document',
+            media: mediaUrl,
+            conversationId,
+            filename: nombreDocumento,
+            mimetype,
+            caption: text.trim() || undefined,
+          });
+          resultado = documentoEnviado;
+          if (documentoEnviado.ok) {
+            const idGuardado = documentoEnviado.data.historyMessageId;
+            if (idGuardado) {
+              setMessagesMap(prev => ({
+                ...prev,
+                [conversationId]: mergeMessagesChronologically([
+                  { ...newMsg, id: idGuardado },
+                  ...(prev[conversationId] || []).filter(msg => msg.id !== newMsg.id),
+                ]),
+              }));
+            } else {
+              setWhatsappError('WhatsApp recibió el documento, pero no se pudo guardar en el historial del CRM.');
+            }
+          }
+        } else if (esAudioSimulado) {
             resultado = await sendMediaMessage({
             phone,
             type: 'audio',
@@ -572,13 +713,6 @@ export default function HomePage() {
             type: 'video',
             media: mediaUrl,
             caption: text.trim() || undefined,
-          });
-        } else if (esDocumento) {
-          resultado = await sendMediaMessage({
-            phone,
-            type: 'document',
-            media: mediaUrl,
-            filename: text.trim() || 'documento',
           });
         } else {
           resultado = await sendTextMessage(phone, text.trim());
@@ -601,8 +735,9 @@ export default function HomePage() {
       }
     }
 
-    // WhatsApp's send-media route persists the image; persist the separate text here.
-    const messagesToPersist = conv.channel === 'whatsapp' && esImagenAdjunta
+    // La ruta de envío guarda la imagen o el documento. El texto va aparte.
+    const mediaPersistedBySendRoute = esDocumentoWhatsApp || (conv.channel === 'whatsapp' && esImagenAdjunta);
+    const messagesToPersist = mediaPersistedBySendRoute
       ? enviarImagenYTexto && textoImagenWhatsAppEnviado
         ? [textMsg]
         : []
@@ -628,8 +763,65 @@ export default function HomePage() {
     return { phone: phone || null, lid }
   }
 
-  const handleDeleteConversation = async (conversationId: string) => {
-    const conv = conversations.find(c => c.id === conversationId)
+  // Mensajes con multimedia cuya fuente aun no conocemos: se reintenta leerlos
+  // de la base porque el binario lo guarda el webhook, no el evento de socket.
+  const mediaRetryIdsRef = useRef<Set<string>>(new Set());
+
+  /**
+   * Relee de la base un mensaje con multimedia que llego sin fuente.
+   *
+   * El servicio de WhatsApp emite por Socket.IO solo metadatos (`media: null`);
+   * el binario va aparte en el POST al webhook. Como el evento se emite antes
+   * que el webhook, la primera respuesta del ingest casi nunca trae `mediaUrl`.
+   * Se reintenta a los 1.5 s, 5 s y 12 s hasta que el webhook lo haya guardado;
+   * en cuanto aparece, la version de la base reemplaza a la copia en memoria.
+   */
+  const refreshMessageMedia = (conversationId: string, messageId: string) => {
+    if (mediaRetryIdsRef.current.has(messageId)) return;
+    mediaRetryIdsRef.current.add(messageId);
+
+    const esperas = [1500, 5000, 12000];
+
+    const intentar = (indice: number) => {
+      if (indice >= esperas.length) {
+        mediaRetryIdsRef.current.delete(messageId);
+        return;
+      }
+
+      window.setTimeout(async () => {
+        try {
+          const res = await apiFetch(
+            `/api/messages?conversationId=${encodeURIComponent(conversationId)}`
+          );
+          if (res.ok) {
+            const data = await res.json().catch(() => null);
+            if (data?.success && Array.isArray(data.data)) {
+              const guardados = data.data as Message[];
+              const guardado = guardados.find(m => m.id === messageId);
+              if (guardado?.mediaUrl || guardado?.media?.data) {
+                setMessagesMap(prev => ({
+                  ...prev,
+                  [conversationId]: mergeMessagesChronologically([
+                    ...(prev[conversationId] || []),
+                    ...guardados,
+                  ]),
+                }));
+                mediaRetryIdsRef.current.delete(messageId);
+                return;
+              }
+            }
+          }
+        } catch {
+          // Sin conexion: se reintenta en la siguiente espera.
+        }
+        intentar(indice + 1);
+      }, esperas[indice]);
+    };
+
+    intentar(0);
+  };
+
+  const handleDeleteConversation = async (conversationId: string) => {    const conv = conversations.find(c => c.id === conversationId)
     if (!conv) return
     const eraLaActiva = activeConversationId === conversationId
 
@@ -649,12 +841,12 @@ export default function HomePage() {
   }
 
   const handleIncomingWhatsAppMessage = async (raw: ReceivedWhatsAppMessage) => {
-    console.log('RAW INCOMING: ', JSON.stringify(raw, null, 2))
     if (!raw || typeof raw !== 'object') return;
 
     const messageId = String(raw.messageId || `m_inc_${Date.now()}`);
+    // No se marca aqui: solo cuenta como procesado cuando el POST confirma que
+    // el mensaje quedo guardado. Si falla, el siguiente ciclo lo reintenta.
     if (processedIncomingIdsRef.current.has(messageId)) return;
-    processedIncomingIdsRef.current.add(messageId);
 
 
     const from = String(raw.from || '')
@@ -684,8 +876,10 @@ export default function HomePage() {
       || (resolvedPhone ? formatPhoneDisplay(resolvedPhone) : 'Contacto WhatsApp');
     const interactive = parseInteractive(raw.rawMessage)
     const text = String(raw.text || '') || (interactive ? interactiveToText(interactive) : '');
+    const origin = originFromMessage(text);
     const receivedAt = raw.receivedAt ? new Date(raw.receivedAt) : new Date();
-    const timestampLbl = formatTime(receivedAt);
+    const messageDate = getMessageEventDate(raw.timestamp, receivedAt.toISOString());
+    const timestampLbl = formatTime(messageDate);
 
     let saved:
       | { contact?: Contact; conversation?: Conversation; message?: Message; isNewContact?: boolean; isNewConversation?: boolean }
@@ -710,17 +904,41 @@ export default function HomePage() {
           // backend solo ve la bandera y no hay nada que persistir en disco.
           mediaType: raw.mediaType ?? undefined,
           media: raw.media ?? undefined,
+          // Stickers y demas media que el servicio ya sirve por URL: sin esto
+          // el backend solo veia `hasMedia` y no tenia nada que guardar.
+          mediaUrl: raw.mediaUrl ?? undefined,
           receivedAt: receivedAt.toISOString(),
           // Detectar si el from es un LID y enviar los campos adicionales
           isLid: fromIsLid,
           lidBase: lidBase || undefined,
-          resolvedPhone,
-          rawMessage: raw.rawMessage
+          // Si WhatsApp no pudo resolver el telefono de un LID, omitirlo
+          // mantiene compatibilidad con despliegues cuyo schema solo acepta
+          // este campo cuando contiene un numero.
+          resolvedPhone: resolvedPhone ?? undefined,
+          rawMessage: raw.rawMessage,
+          origin,
         }),
       });
       if (res.ok) {
-        const payload = await res.json();
-        if (payload.success && payload.data) saved = payload.data;
+        const payload = await res.json().catch(() => null);
+        if (payload?.success && payload.data) {
+          saved = payload.data;
+          // Idempotencia: el id solo se da por procesado cuando el servidor
+          // confirmo el guardado. Antes se marcaba al entrar, asi que un POST
+          // fallido (503, red caida...) dejaba el mensaje sin guardar para
+          // siempre hasta recargar.
+          processedIncomingIdsRef.current.add(messageId);
+        } else {
+          setWhatsappError(
+            String(payload?.error || 'WhatsApp no pudo guardar el mensaje entrante.')
+          );
+        }
+      } else {
+        const payload = await res.json().catch(() => null);
+        const detalle =
+          payload?.error ||
+          `WhatsApp no pudo guardar el mensaje entrante (${res.status}).`;
+        setWhatsappError(String(detalle));
       }
     } catch {
       saved = undefined;
@@ -734,6 +952,9 @@ export default function HomePage() {
     }
 
     let targetId = '';
+    // El servidor ya sube el contador de no leidos al guardar (webhook o este
+    // POST). Si ademas se suma aqui, un solo mensaje deja "2 nuevos".
+    let contadorYaActualizado = false;
 
     if (saved?.conversation?.id) {
       targetId = saved.conversation.id;
@@ -745,14 +966,21 @@ export default function HomePage() {
           prev.some(c => c.id === sc.id) ? prev.map(c => (c.id === sc.id ? { ...c, ...sc } : c)) : [sc, ...prev]
         );
       }
-      if (saved.isNewConversation) {
-        setConversations(prev => [saved!.conversation!, ...prev]);
-        setActiveConversationId(targetId);
-      } else {
-        setConversations(prev =>
-          prev.map(c => (c.id === targetId ? saved!.conversation! : c))
-        );
-      }
+
+      // No basta con `isNewConversation`: el webhook (y el sondeo de 5 s)
+      // corren en paralelo a este POST. El primero que llega crea la
+      // conversacion y se lleva el `true`; el otro recibe `false` aunque en
+      // esta pestaña el chat no exista todavia. Con el `map()` de antes se
+      // descartaba en silencio y un contacto nuevo no aparecia hasta recargar
+      // (la recarga si lo trae de Postgres). Upsert por id.
+      const convServidor: Conversation = saved.conversation.contact
+        ? saved.conversation
+        : { ...saved.conversation, contact: saved.contact ?? contactoPlaceholder(saved.conversation) };
+      const yaEnLista = conversationsRef.current.some(c => c.id === targetId);
+
+      setConversations(prev => upsertConversationInList(prev, convServidor).conversations);
+      if (!yaEnLista) setActiveConversationId(targetId);
+      contadorYaActualizado = true;
     } else {
       // Fallback: la BD no respondio; igual mostramos el chat en memoria.
       let foundId = conversationByPhoneRef.current.get(conversationKey) || (lidBase ? conversationByPhoneRef.current.get(`lid:${lidBase}`) : '');
@@ -811,6 +1039,8 @@ export default function HomePage() {
         setContacts(prev => [newContact, ...prev]);
         setConversations(prev => [newConv, ...prev]);
         setActiveConversationId(newConv.id);
+        // newConv ya nace con unreadCount 1: sumar otro daria 2.
+        contadorYaActualizado = true;
       }
     }
 
@@ -818,28 +1048,38 @@ export default function HomePage() {
     const incomingMsg: Message = {
       id: saved?.message?.id || messageId,
       conversationId: targetId,
+      createdAt: saved?.message?.createdAt || messageDate.toISOString(),
       sender: 'contact',
       senderName: name,
       text,
       timestamp: saved?.message?.timestamp || timestampLbl,
       channel: 'whatsapp',
       status: 'read',
-      hasMedia: raw.hasMedia || false,
+      hasMedia: raw.hasMedia || Boolean(saved?.message?.mediaUrl || raw.mediaUrl || raw.media?.data),
       mediaType: saved?.message?.mediaType ?? raw.mediaType,
       media: saved?.message?.media ?? raw.media,
-      mediaUrl: saved?.message?.mediaUrl,
+      // El guardado manda; si el backend no devolvio URL (p. ej. POST fallido)
+      // se usa la que traia el socket para no dejar la burbuja vacia.
+      mediaUrl: saved?.message?.mediaUrl || raw.mediaUrl,
       interactive: saved?.message?.interactive ?? interactive ?? undefined
     };
 
     setMessagesMap(prev => ({
       ...prev,
-      [targetId]: dedupeMessages([...(prev[targetId] || []), incomingMsg])
+      [targetId]: mergeMessagesChronologically([...(prev[targetId] || []), incomingMsg])
     }));
+
+    // El socket no trae el binario: si la respuesta del ingest no dio fuente,
+    // se busca el mensaje ya guardado por el webhook (sticker, imagen, video).
+    if (incomingMsg.hasMedia && !incomingMsg.mediaUrl) {
+      refreshMessageMedia(targetId, incomingMsg.id);
+    }
 
     // Si la conversacion esta abierta en pantalla, el mensaje se esta leyendo
     // ahora mismo: contarlo como no leido pondria un globo de "1 nuevo" en el
-    // chat que el usuario tiene delante.
-    const estaAbierta = targetId === activeConversationId;
+    // chat que el usuario tiene delante. Un chat nuevo se abre solo, asi que
+    // tambien cuenta como leido.
+    const estaAbierta = targetId === activeConversationId || !conversationsRef.current.some(c => c.id === targetId);
 
     setConversations(prev => prev.map(c => {
       if (c.id === targetId) {
@@ -849,7 +1089,9 @@ export default function HomePage() {
           ...c,
           lastMessage: lastMessageDisplay,
           lastMessageTime: saved ? 'Ahora' : timestampLbl,
-          unreadCount: estaAbierta ? 0 : (c.unreadCount || 0) + 1
+          unreadCount: estaAbierta ? 0 : (c.unreadCount || 0) + (contadorYaActualizado ? 0 : 1),
+          // Refresca la etiqueta de la lista sin esperar a recargar.
+          updatedAt: new Date().toISOString()
         };
       }
       return c;
@@ -927,6 +1169,7 @@ export default function HomePage() {
     const botMsg: Message = {
       id: messageId,
       conversationId: targetId,
+      createdAt: new Date().toISOString(),
       sender: 'bot',
       senderName: 'Asistente XIO',
       text,
@@ -949,7 +1192,10 @@ export default function HomePage() {
         thread.some(m => m.id === messageId) ||
         (text.length > 0 && !!last && last.sender === 'bot' && last.text === text);
       if (dup) return prev;
-      return { ...prev, [targetId]: [...thread, botMsg] };
+      return {
+        ...prev,
+        [targetId]: sortMessagesChronologically([...thread, botMsg]),
+      };
     });
 
     // Espejo de bumpLastMessage() en POST /api/messages: último mensaje + sin
@@ -957,7 +1203,7 @@ export default function HomePage() {
     const mediaLabel = raw.hasMedia ? getMediaLabel(raw.mediaType) : '';
     setConversations(prev => prev.map(c =>
       c.id === targetId
-        ? { ...c, lastMessage: text || mediaLabel || '[Mensaje]', lastMessageTime: 'Ahora', unreadCount: 0 }
+        ? { ...c, lastMessage: text || mediaLabel || '[Mensaje]', lastMessageTime: 'Ahora', unreadCount: 0, updatedAt: new Date().toISOString() }
         : c
     ));
   };
@@ -967,7 +1213,11 @@ export default function HomePage() {
 
     const socket = createSocket(WHATSAPP_SERVICE_URL, {
       transports: ['websocket', 'polling'],
-      reconnectionAttempts: 5,
+      // El servicio se reinicia a menudo (y la red del cliente parpadea): se
+      // reintenta sin limite, con techo de 10 s, en vez de rendirse a los 5
+      // intentos y dejar el inbox "congelado" hasta refrescar.
+      reconnectionAttempts: Infinity,
+      reconnectionDelayMax: 10000,
       timeout: 5000,
       auth: (callback) => {
         fetch('/api/wa-socket-token', { cache: 'no-store' })
@@ -977,6 +1227,18 @@ export default function HomePage() {
       }
     });
     whatsappSocketRef.current = socket;
+
+    // Socket.IO deja de reintentar por su cuenta cuando el fallo es definitivo
+    // (p. ej. el handshake rechaza el token). En ese caso `socket.active` es
+    // false y hay que reabrir el canal a mano.
+    let reconnectTimer: number | null = null;
+    const reconnectLater = () => {
+      if (socket.active || reconnectTimer !== null) return;
+      reconnectTimer = window.setTimeout(() => {
+        reconnectTimer = null;
+        if (!socket.connected) socket.connect();
+      }, 3000);
+    };
 
     socket.on('connect', () => {
       setIsWhatsappSocketConnected(true);
@@ -999,8 +1261,15 @@ export default function HomePage() {
     socket.on('outgoing-message', (msg: { messageId?: string; jid?: string; text?: string; senderName?: string; timestamp?: string }) => {
       outgoingHandlerRef.current(msg);
     });
-    socket.on('disconnect', () => {
+    socket.on('disconnect', (reason) => {
       setIsWhatsappSocketConnected(false);
+      // 'io server disconnect' es el unico caso en el que el cliente NO
+      // reconecta solo: el servidor cerro el canal a proposito.
+      if (reason === 'io server disconnect') reconnectLater();
+    });
+    socket.on('connect_error', () => {
+      setIsWhatsappSocketConnected(false);
+      reconnectLater();
     });
 
     // Estado inicial + historial reciente cuando el CRM arranca.
@@ -1009,13 +1278,35 @@ export default function HomePage() {
         setWhatsappStatus(st.data);
       }
     });
+    // Al cargar la pagina los mensajes recientes que devuelve el servicio ya
+    // estan en la base (los guardo el webhook, que se registra en cada
+    // conexion). Reenviarlos a /api/whatsapp/incoming solo reabriria
+    // conversaciones ya leidas y volveria a sumar no leidos: se marcan como
+    // procesados para que el ciclo de sincronizacion no los repita.
     getReceivedMessages(50).then(res => {
-      if (res.ok && Array.isArray(res.data.messages)) {
-        res.data.messages.forEach(m => incomingHandlerRef.current(m));
-      }
+      if (!res.ok || !Array.isArray(res.data.messages)) return;
+      res.data.messages.forEach(m => {
+        const id = String(m.messageId || '');
+        if (id) processedIncomingIdsRef.current.add(id);
+      });
     });
 
+    // Reconciliación de respaldo: Socket.IO es realtime, pero una caída del
+    // transporte o de una reconexion puede perder un evento. Consultar mensajes
+    // recientes mantiene el inbox actualizado sin obligar a refrescar la pagina.
+    // processedIncomingIds evita que el mismo mensaje se vuelva a insertar.
+    const syncReceivedMessages = () => {
+      getReceivedMessages(50).then(res => {
+        if (res.ok && Array.isArray(res.data.messages)) {
+          res.data.messages.forEach(m => incomingHandlerRef.current(m));
+        }
+      });
+    };
+    const receivedSyncInterval = window.setInterval(syncReceivedMessages, 5000);
+
     return () => {
+      window.clearInterval(receivedSyncInterval);
+      if (reconnectTimer !== null) window.clearTimeout(reconnectTimer);
       socket.disconnect();
       whatsappSocketRef.current = null;
       setIsWhatsappSocketConnected(false);
@@ -1279,6 +1570,7 @@ export default function HomePage() {
       [newConvId]: [{
         id: `m_${Date.now()}`,
         conversationId: newConvId,
+        createdAt: new Date().toISOString(),
         sender: 'bot',
         senderName: 'XIO Engine',
         text: `Lead registrado vía ${newContact.channel.toUpperCase()}. Score inicial de IA: ${newContact.leadScore}%`,
@@ -1740,14 +2032,37 @@ export default function HomePage() {
       )}
 
 
+      {/* Aviso: sin socket con el servicio de WhatsApp. Los chats siguen
+          visibles porque vienen de la base; solo se pierde el tiempo real. */}
+      {!isWhatsappSocketConnected && (
+        <div className="fixed top-0 inset-x-0 z-205 bg-slate-800 text-white shadow-md" role="status">
+          <div className="mx-auto flex max-w-5xl items-center gap-3 px-4 py-2 text-xs sm:text-sm">
+            <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white text-slate-800 font-bold">
+              !
+            </span>
+            <p className="flex-1 font-semibold">
+              WhatsApp desconectado. Los chats se muestran desde la base de datos; los mensajes nuevos pueden tardar en aparecer.
+            </p>
+          </div>
+        </div>
+      )}
+
+
       {/* Sidebar */}
-      <Sidebar
-        activeTab={activeTab}
-        onSelectTab={cambiarTab}
-        unreadTotal={unreadTotal}
-        isOpen={isSidebarOpen}
-        onClose={() => setIsSidebarOpen(false)}
-      />
+      {/* Sidebar */}
+<Sidebar
+  activeTab={activeTab}
+  onSelectTab={cambiarTab}
+  unreadTotal={unreadTotal}
+  isOpen={isSidebarOpen}
+  onClose={() => setIsSidebarOpen(false)}
+  sessionPhone={formatPhoneDisplay(getSessionPhone(whatsappStatus))}
+  sessionName={getSessionName(whatsappStatus) || undefined}
+  whatsappConnected={
+    isWhatsappSocketConnected &&
+    whatsappStatus?.connectionStatus === 'connected'
+  }
+/>
 
       {/* Main Container */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">

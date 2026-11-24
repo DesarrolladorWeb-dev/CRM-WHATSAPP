@@ -36,7 +36,7 @@
     "jose": "^6.2.12",
     "lucide-react": "^0.546.0",
     "mongoose": "^9.10.2",
-    "next": "^16.3.6",
+    "next": "^16.4.6",
     "pg": "^8.23.0",
     "rate-limiter-flexible": "^11.2.0",
     "react": "^19.3.0",

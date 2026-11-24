@@ -119,6 +119,21 @@ El sistema utiliza el SDK oficial `@google/genai` con el modelo `gemini-3.6-flas
 | `POST` | `/api/ai/chatbot-autorespond`| Simulación de respuesta automática de bot. |
 | `POST` | `/api/webhooks/test` | Simulación de envío webhook. La "firma" devuelta **no es un HMAC-SHA256 real**, es el payload codificado en hexadecimal — no usar como verificación de integridad. |
 
+### Origen de contactos
+
+`GET /api/contacts?origin=facebook_ads` filtra por procedencia; `channel` sigue reservado para el canal de comunicación (WhatsApp, Instagram, etc.). Para crear un contacto desde n8n, se puede enviar `origin` explícitamente:
+
+```json
+{
+  "name": "Ana",
+  "handle": "ana-123",
+  "phone": "+51987654321",
+  "origin": "facebook_ads"
+}
+```
+
+Para compatibilidad con flujos que ya envían `channel` como procedencia, `POST /api/contacts` también interpreta valores que no sean canales sociales como `origin` y asigna WhatsApp como canal de comunicación. En `/api/whatsapp/webhook`, `channel` se guarda como origen del contacto; el canal de la conversación entrante permanece en WhatsApp.
+
 ---
 
 ## 7. Guía de Instalación, Configuración y Despliegue

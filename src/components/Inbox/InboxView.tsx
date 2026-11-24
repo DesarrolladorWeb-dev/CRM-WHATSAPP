@@ -20,21 +20,25 @@ import {
 import { QuickRepliesModal } from './QuickRepliesModal';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { VoiceNotePlayer } from './VoiceNotePlayer';
+import { MediaLightbox } from './MediaLightbox';
 import { AppRouterInstance } from 'next/dist/shared/lib/app-router-context.shared-runtime';
 import { ReadonlyURLSearchParams } from 'next/navigation';
 import { AI_MODEL_NAME } from '@/lib/constants';
 import { formatPhoneDisplay } from '@/lib/whatsappService';
+import { formatTime, formatWallClock } from '@/lib/time';
 import { WhatsAppIcon, XBrandIcon, MessengerIcon } from '@/components/Icons/ChannelIcons';
 import { Button, Modal } from '../ui';
 import { InteractiveButtons } from './InteractiveButtons';
 import { InteractiveContent } from '@/lib/whatsappInteractive';
+import { originMatchesChannelFilter } from '@/lib/contactOrigin';
+import { ContactOriginBadge } from '@/components/Icons/ContactOriginBadge';
 interface InboxViewProps {
   canDeleteContacts: boolean;
   conversations: Conversation[];
   activeConversationId: string;
   onSelectConversation: (id: string) => void;
   messagesMap: Record<string, Message[]>;
-  onSendMessage: (conversationId: string, text: string, aiGenerated?: boolean, mediaUrl?: string, interactive?: InteractiveContent, mediaType?: 'image') => void;
+  onSendMessage: (conversationId: string, text: string, aiGenerated?: boolean, mediaUrl?: string, interactive?: InteractiveContent, mediaType?: Message['mediaType'], filename?: string, mimetype?: string) => void;
   onUpdateContactStage: (contactId: string, newStage: PipelineStage) => void;
   onUpdateContactTags: (contactId: string, newTags: string[]) => void;
   handleDeleteConversation: (conversationId: string) => void;
@@ -61,6 +65,68 @@ interface CollapsibleSectionProps {
 }
 
 const URL_RE = /(https?:\/\/[^\s]+)/g
+
+// La multimedia nueva se sirve desde /api/media/... (disco);
+// los mensajes antiguos siguen trayendo el base64 embebido.
+function getMessageMediaSrc(msg: Message): string {
+  const directa = (msg.mediaUrl || '').trim()
+  if (directa) return directa
+
+  const data = (msg.media?.data || '').trim()
+  if (!data) return ''
+
+  // `media.data` normalmente es base64, pero hay integraciones que meten ahi la
+  // URL ya servida o un data URL completo. Envolver eso otra vez producia
+  // `data:image/webp;base64,https://...`, que el navegador no puede cargar.
+  if (/^(https?:\/\/|data:)/i.test(data)) return data
+
+  return `data:${msg.media?.mimetype || 'application/octet-stream'};base64,${data}`
+}
+
+function isImageMessage(msg: Message): boolean {
+  const src = getMessageMediaSrc(msg)
+  if (!src || !(msg.hasMedia || msg.mediaUrl)) return false
+  return msg.mediaType === 'image' || (!msg.mediaType && !!msg.mediaUrl && !src.startsWith('data:audio/'))
+}
+
+/**
+ * Etiqueta de hora de la lista de chats, calculada en la zona del negocio
+ * (America/Lima) y no en la del navegador:
+ *
+ *   - Hoy            -> "14:05"
+ *   - Ayer           -> "Ayer"
+ *   - Mismo año      -> "24/09"
+ *   - Otro año       -> "24/09/25"
+ *
+ * Se parte de `updatedAt` (la ultima actualizacion real de la conversacion en
+ * la base). `lastMessageTime` solo se usa como respaldo cuando la conversacion
+ * todavia no tiene `updatedAt` (mocks, objetos creados en memoria), porque ese
+ * campo guardaba el literal 'Ahora' y por eso toda la lista decia "Ahora".
+ */
+function formatConversationTime(updatedAt?: string, fallback?: string): string {
+  if (!updatedAt) return fallback || '';
+
+  const fecha = new Date(updatedAt);
+  if (Number.isNaN(fecha.getTime())) return fallback || '';
+
+  // formatWallClock devuelve "YYYY-MM-DDTHH:mm" en la zona del negocio.
+  const diaDe = (d: Date) => formatWallClock(d).slice(0, 10);
+  const hoy = diaDe(new Date());
+  const dia = diaDe(fecha);
+
+  if (dia === hoy) return formatTime(fecha);
+
+  // Ayer se calcula sobre el calendario (no restando 24 h): asi no depende de
+  // la hora actual ni de que la zona tenga horario de verano.
+  const [anio, mes, diaMes] = hoy.split('-').map(Number);
+  const ayer = new Date(Date.UTC(anio, mes - 1, diaMes - 1)).toISOString().slice(0, 10);
+  if (dia === ayer) return 'Ayer';
+
+  const [anioMensaje, mesMensaje, diaMensaje] = dia.split('-');
+  return anioMensaje === hoy.slice(0, 4)
+    ? `${diaMensaje}/${mesMensaje}`
+    : `${diaMensaje}/${mesMensaje}/${anioMensaje.slice(2)}`;
+}
 
 function renderTextWithLinks(text: string) {
   return text.split(URL_RE).map((part, i) =>
@@ -265,7 +331,19 @@ export const InboxView: React.FC<InboxViewProps> = ({
   const [tagInput, setTagInput] = useState<string>('');
   const [isQuickRepliesModalOpen, setIsQuickRepliesModalOpen] = useState<boolean>(false);
   const [attachedImageUrl, setAttachedImageUrl] = useState<string>('');
+  const [attachedFileName, setAttachedFileName] = useState<string>('');
+  const [attachedMimeType, setAttachedMimeType] = useState<string>('');
+  const [attachedMediaType, setAttachedMediaType] = useState<Message['mediaType']>('image');
+  const [attachmentError, setAttachmentError] = useState<string>('');
   const [showAttachInput, setShowAttachInput] = useState<boolean>(false);
+  // Id de la imagen abierta en el visor (null = cerrado).
+  const [lightboxImageId, setLightboxImageId] = useState<string | null>(null);
+  // Medios que no cargaron (archivo borrado, URL caida, 404): se sustituyen
+  // por un recuadro con "Archivo no disponible" en vez de dejar el icono roto.
+  // La clave lleva el tipo porque un mismo mensaje podria renderizar varios.
+  const [failedMedia, setFailedMedia] = useState<Record<string, boolean>>({});
+  const markMediaFailed = (key: string) =>
+    setFailedMedia(prev => (prev[key] ? prev : { ...prev, [key]: true }));
 
   const [showExtensionPanel, setShowExtensionPanel] = useState<boolean>(true);
   const [openPanelSections, setOpenPanelSections] = useState<Record<string, boolean>>({
@@ -370,7 +448,8 @@ export const InboxView: React.FC<InboxViewProps> = ({
   };
 
   const filteredConversations = conversations.filter(c => {
-    const matchesChannel = channelFilter === 'all' || c.channel === channelFilter;
+    const matchesChannel = channelFilter === 'all' ||
+      originMatchesChannelFilter(channelFilter, c.contact.origin || c.contact.channel);
     const matchesSearch = !searchQuery ||
       c.contact.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       c.lastMessage.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -475,9 +554,22 @@ export const InboxView: React.FC<InboxViewProps> = ({
 
   const handleSend = () => {
     if ((!inputText.trim() && !attachedImageUrl) || !activeConv) return;
-    onSendMessage(activeConv.id, inputText.trim(), false, attachedImageUrl || undefined,undefined,'image');
+    onSendMessage(
+      activeConv.id,
+      inputText.trim(),
+      false,
+      attachedImageUrl || undefined,
+      undefined,
+      attachedMediaType,
+      attachedFileName || undefined,
+      attachedMimeType || undefined,
+    );
     setInputText('');
     setAttachedImageUrl('');
+    setAttachedFileName('');
+    setAttachedMimeType('');
+    setAttachedMediaType('image');
+    setAttachmentError('');
     setShowAttachInput(false);
     setAiSuggestions(null);
   };
@@ -686,6 +778,22 @@ export const InboxView: React.FC<InboxViewProps> = ({
         return <span className="px-2.5 py-0.5 bg-slate-100 border border-slate-300 text-slate-700 text-[10px] font-bold rounded-full shadow-2xs flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-slate-400" /> Neutral</span>;
     }
   };
+
+
+  // Imágenes de la conversación abierta, para navegar con ← / → en el visor.
+  const lightboxImages = activeMessages
+    .filter(isImageMessage)
+    .map((msg) => ({
+      id: msg.id,
+      src: getMessageMediaSrc(msg),
+      filename: msg.media?.filename || 'Imagen',
+    }));
+
+  // Guardamos el id (no el índice) para que el visor se cierre solo si al
+  // cambiar de conversación esa imagen ya no está en la galería.
+  const lightboxIndex = lightboxImageId
+    ? lightboxImages.findIndex((img) => img.id === lightboxImageId)
+    : -1;
 
 
   return (
@@ -897,7 +1005,7 @@ export const InboxView: React.FC<InboxViewProps> = ({
                         {conv.contact.name}
                       </h4>
                       <span className="text-[10px] text-slate-400 font-semibold shrink-0">
-                        {conv.lastMessageTime}
+                        {formatConversationTime(conv.updatedAt, conv.lastMessageTime)}
                       </span>
                     </div>
 
@@ -973,6 +1081,7 @@ export const InboxView: React.FC<InboxViewProps> = ({
                   <div className="flex items-center gap-2 min-w-0">
                     <h3 className="font-extrabold text-sm text-slate-900 dark:text-slate-100 truncate min-w-0">{contact.name}</h3>
                     {getChannelBadge(contact.channel)}
+                    <ContactOriginBadge origin={contact.origin} />
                   </div>
                   <p className="text-xs text-slate-500 font-medium flex items-center gap-1 min-w-0 overflow-hidden whitespace-nowrap">
                     {/* <span className="flex items-center gap-1 truncate min-w-0"><Building2 className="w-3 h-3 shrink-0" /> <span className="truncate">{'Empresa'}</span></span>
@@ -1130,13 +1239,7 @@ export const InboxView: React.FC<InboxViewProps> = ({
                   msg.interactive?.body || msg.text,
                   msg.interactive?.footer
                 ].filter(Boolean).join('\n');
-                // La multimedia nueva se sirve desde /api/media/... (disco);
-                // los mensajes antiguos siguen trayendo el base64 embebido.
-                const mediaSrc =
-                  msg.mediaUrl ||
-                  (msg.media?.data
-                    ? `data:${msg.media.mimetype};base64,${msg.media.data}`
-                    : '');
+                const mediaSrc = getMessageMediaSrc(msg);
                 return (
                   <div
                     key={msg.id}
@@ -1159,16 +1262,56 @@ export const InboxView: React.FC<InboxViewProps> = ({
                         : 'bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 border border-slate-200/90 dark:border-slate-700 rounded-tl-xs shadow-slate-900/5'
                       }`}
                     >
+                      {msg.mediaType === 'document' && (
+                        <div className="mb-2 p-3 bg-slate-100 rounded-xl border border-slate-200 flex items-center gap-3">
+                          <FileText className="w-8 h-8 text-slate-500 shrink-0" />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-bold text-slate-800 truncate">
+                              {msg.media?.filename || 'Documento'}
+                            </p>
+                            <p className="text-[10px] text-slate-500">
+                              {msg.media?.mimetype || 'Documento adjunto'}
+                            </p>
+                          </div>
+                          {mediaSrc && msg.sender === 'contact' && (
+                            <a
+                              href={mediaSrc.startsWith('/') ? `${mediaSrc}?download=1` : mediaSrc}
+                              target={mediaSrc.startsWith('/') ? undefined : '_blank'}
+                              rel="noopener"
+                              download={msg.media?.filename || 'documento'}
+                              className="px-2 py-1 bg-emerald-100 hover:bg-emerald-200 text-emerald-800 rounded-lg text-[10px] font-bold transition-colors"
+                            >
+                              Descargar
+                            </a>
+                          )}
+                        </div>
+                      )}
+
                       {mediaSrc && (msg.hasMedia || msg.mediaUrl) && (
                         <>
                           {(msg.mediaType === 'image' || (!msg.mediaType && msg.mediaUrl && !msg.mediaUrl.startsWith('data:audio/'))) && (
                             <div className="mb-2 rounded-xl overflow-hidden border border-black/10 bg-black/5 shadow-2xs">
-                              <img
-                                src={mediaSrc}
-                                alt={msg.media?.filename || "Imagen"}
-                                className="w-full max-h-60 object-cover cursor-pointer hover:opacity-95 transition-opacity"
-                                onClick={() => window.open(mediaSrc, '_blank')}
-                              />
+                              {failedMedia[`${msg.id}:image`] ? (
+                                <div className="w-full h-40 flex items-center justify-center px-4 text-center text-[11px] font-semibold text-slate-500 dark:text-slate-300 bg-slate-100 dark:bg-slate-700">
+                                  Archivo no disponible
+                                </div>
+                              ) : (
+                                /* Se abre en el visor superpuesto, como en WhatsApp Web. */
+                                <button
+                                  type="button"
+                                  onClick={() => setLightboxImageId(msg.id)}
+                                  aria-label={`Ampliar imagen${msg.media?.filename ? `: ${msg.media.filename}` : ''}`}
+                                  title="Ver imagen completa"
+                                  className="block w-full cursor-zoom-in focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/60"
+                                >
+                                  <img
+                                    src={mediaSrc}
+                                    alt={msg.media?.filename || "Imagen"}
+                                    className="w-full max-h-60 object-cover hover:opacity-95 transition-opacity"
+                                    onError={() => markMediaFailed(`${msg.id}:image`)}
+                                  />
+                                </button>
+                              )}
                             </div>
                           )}
                           {msg.mediaType === 'video' && (
@@ -1185,38 +1328,35 @@ export const InboxView: React.FC<InboxViewProps> = ({
                               <VoiceNotePlayer src={mediaSrc} />
                             </div>
                           )}
-                          {msg.mediaType === 'document' && (
-                            <div className="mb-2 p-3 bg-slate-100 rounded-xl border border-slate-200 flex items-center gap-3">
-                              <FileText className="w-8 h-8 text-slate-500 shrink-0" />
-                              <div className="flex-1 min-w-0">
-                                <p className="text-xs font-bold text-slate-800 truncate">
-                                  {msg.media?.filename || 'Documento'}
-                                </p>
-                                <p className="text-[10px] text-slate-500">
-                                  {msg.media?.mimetype}
-                                </p>
-                              </div>
-                              <a
-                                href={mediaSrc.startsWith('/') ? `${mediaSrc}?download=1` : mediaSrc}
-                                target={mediaSrc.startsWith('/') ? undefined : '_blank'}
-                                rel="noopener"
-                                download={msg.media?.filename || 'documento'}
-                                className="px-2 py-1 bg-emerald-100 hover:bg-emerald-200 text-emerald-800 rounded-lg text-[10px] font-bold transition-colors"
-                              >
-                                Descargar
-                              </a>
-                            </div>
-                          )}
                           {msg.mediaType === 'sticker' && (
                             <div className="mb-2">
-                              <img
-                                src={mediaSrc}
-                                alt="Sticker"
-                                className="w-32 h-32 object-contain"
-                              />
+                              {failedMedia[`${msg.id}:sticker`] ? (
+                                <div className="w-32 h-32 flex items-center justify-center px-2 text-center rounded-xl bg-slate-100 dark:bg-slate-700 text-[10px] font-semibold text-slate-500 dark:text-slate-300">
+                                  Archivo no disponible
+                                </div>
+                              ) : (
+                                <img
+                                  src={mediaSrc}
+                                  alt="Sticker"
+                                  className="w-32 h-32 object-contain"
+                                  onError={() => markMediaFailed(`${msg.id}:sticker`)}
+                                />
+                              )}
                             </div>
                           )}
                         </>
+                      )}
+
+                      {/* Multimedia sin fuente: el socket del servicio no lleva
+                          el binario (viaja aparte, por el webhook), asi que
+                          hasta que la base responde la burbuja se quedaba en
+                          blanco (un hueco de 0 px). Se avisa en vez de dejar
+                          un hueco invisible. Los documentos tienen su propio
+                          bloque con el nombre del archivo. */}
+                      {!mediaSrc && msg.mediaType !== 'document' && (msg.hasMedia || msg.mediaType) && (
+                        <div className="mb-2 w-32 h-32 flex items-center justify-center px-2 text-center rounded-xl bg-slate-100 dark:bg-slate-700 text-[10px] font-semibold text-slate-500 dark:text-slate-300">
+                          {msg.mediaType === 'sticker' ? 'Sticker no disponible' : 'Archivo no disponible'}
+                        </div>
                       )}
 
                       {/* {msg.text && (
@@ -1460,28 +1600,62 @@ export const InboxView: React.FC<InboxViewProps> = ({
               }
 
               {showAttachInput && (
-                <div className="p-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl flex items-center gap-2 shadow-2xs text-slate-600 dark:text-slate-300">
+                <div className="p-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl flex flex-wrap items-center gap-2 shadow-2xs text-slate-600 dark:text-slate-300">
                   <ImageIcon className="w-4 h-4 shrink-0" />
                   <input
                     type="url"
                     value={attachedImageUrl}
-                    onChange={(e) => setAttachedImageUrl(e.target.value)}
+                    onChange={(e) => {
+                      setAttachedImageUrl(e.target.value);
+                      setAttachedFileName('');
+                      setAttachedMimeType('');
+                      setAttachedMediaType('image');
+                      setAttachmentError('');
+                    }}
                     placeholder="Pega la URL de una imagen (ej: https://...)"
                     className="flex-1 min-w-0 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-2.5 py-1 text-xs text-slate-800 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 outline-none focus:ring-2 focus:ring-emerald-500/20"
                   />
                   <label
-                    title="Subir imagen desde tu PC"
+                    title="Subir imagen o documento desde tu PC"
                     className="px-2.5 py-1 bg-emerald-50 dark:bg-emerald-900/40 hover:bg-emerald-100 dark:hover:bg-emerald-900/70 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700 rounded-xl text-[11px] font-bold flex items-center gap-1 cursor-pointer transition-colors shrink-0"
                   >
                     <FolderOpen className="w-3.5 h-3.5" />
                     <span>Subir de PC</span>
                     <input
                       type="file"
-                      accept="image/*"
+                      accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation"
                       className="hidden"
                       onChange={(e) => {
                         const file = e.target.files?.[0];
                         if (!file) return;
+                        setAttachmentError('');
+                        const extension = file.name.split('.').pop()?.toLowerCase();
+                        const supportedImages = new Set(['jpg', 'jpeg', 'png', 'webp', 'gif', 'avif', 'bmp', 'tif', 'tiff', 'ico', 'heic', 'heif']);
+                        const isImage = file.type.startsWith('image/') || supportedImages.has(extension || '');
+                        const supportedDocuments = new Set(['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx']);
+                        if (!isImage && !supportedDocuments.has(extension || '')) {
+                          setAttachmentError('Formato no permitido. Elige una imagen, PDF, Word, Excel o PowerPoint.');
+                          e.target.value = '';
+                          return;
+                        }
+                        const maxBytes = (isImage ? 10 : 50) * 1024 * 1024;
+                        if (file.size > maxBytes) {
+                          setAttachmentError(`El archivo supera el límite de ${isImage ? 10 : 50} MiB.`);
+                          e.target.value = '';
+                          return;
+                        }
+                        const officeMimeTypes: Record<string, string> = {
+                          pdf: 'application/pdf',
+                          doc: 'application/msword',
+                          docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                          xls: 'application/vnd.ms-excel',
+                          xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                          ppt: 'application/vnd.ms-powerpoint',
+                          pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+                        };
+                        setAttachedFileName(file.name);
+                        setAttachedMimeType(file.type || officeMimeTypes[extension || ''] || '');
+                        setAttachedMediaType(isImage ? 'image' : 'document');
                         const reader = new FileReader();
                         reader.onload = (ev) => {
                           if (ev.target?.result) {
@@ -1493,17 +1667,32 @@ export const InboxView: React.FC<InboxViewProps> = ({
                     />
                   </label>
                   {attachedImageUrl && (
-                    <img
-                      src={attachedImageUrl}
-                      alt="Preview"
-                      className="w-8 h-8 rounded-lg object-cover border border-slate-200 shadow-2xs shrink-0"
-                    />
+                    attachedMediaType === 'image' ? (
+                      <img
+                        src={attachedImageUrl}
+                        alt="Preview"
+                        className="w-8 h-8 rounded-lg object-cover border border-slate-200 shadow-2xs shrink-0"
+                      />
+                    ) : (
+                      <span className="max-w-48 truncate text-[11px] font-semibold" title={attachedFileName}>
+                        <FileText className="inline w-4 h-4 mr-1" />{attachedFileName}
+                      </span>
+                    )
+                  )}
+                  {attachmentError && (
+                    <span role="alert" className="basis-full text-[11px] font-semibold text-red-600 dark:text-red-400">
+                      {attachmentError}
+                    </span>
                   )}
                   <button
                     type="button"
                     onClick={() => {
                       setShowAttachInput(false);
                       setAttachedImageUrl('');
+                      setAttachedFileName('');
+                      setAttachedMimeType('');
+                      setAttachedMediaType('image');
+                      setAttachmentError('');
                     }}
                     aria-label="Cancelar adjunto de imagen"
                     className="text-slate-400 hover:text-slate-600 px-1 cursor-pointer"
@@ -1517,8 +1706,8 @@ export const InboxView: React.FC<InboxViewProps> = ({
                 <button
                   type="button"
                   onClick={() => setShowAttachInput(!showAttachInput)}
-                  title="Adjuntar imagen por URL o archivo"
-                  aria-label="Adjuntar imagen por URL o archivo"
+                  title="Adjuntar imagen o documento por URL o archivo"
+                  aria-label="Adjuntar imagen o documento por URL o archivo"
                   className={`p-2 rounded-xl transition-colors cursor-pointer ${attachedImageUrl || showAttachInput
                     ? 'bg-emerald-100 text-emerald-700'
                     : 'text-slate-400 hover:text-slate-600 hover:bg-slate-200/60'
@@ -1768,6 +1957,16 @@ export const InboxView: React.FC<InboxViewProps> = ({
               <Mail className="w-3.5 h-3.5" />
               <span>{contact.email || 'Sin correo'}</span>
             </div>
+            <div className="flex items-center gap-2 text-slate-700 dark:text-slate-300 font-medium text-xs">
+              {contact.origin ? (
+                <ContactOriginBadge origin={contact.origin} />
+              ) : (
+                <>
+                  <Globe className="w-3.5 h-3.5" />
+                  <span>Origen: No especificado</span>
+                </>
+              )}
+            </div>
           </CollapsibleSection>
 
           <CollapsibleSection
@@ -1962,6 +2161,13 @@ export const InboxView: React.FC<InboxViewProps> = ({
         message={`Esta acción eliminará ${selectedContactIds.size === 1 ? 'el contacto seleccionado' : `los ${selectedContactIds.size} contactos seleccionados`} y todas sus conversaciones en todos los canales, de forma permanente. No se puede deshacer.`}
         confirmLabel="Eliminar"
         tone="danger"
+      />
+
+      <MediaLightbox
+        images={lightboxImages}
+        index={lightboxIndex >= 0 ? lightboxIndex : null}
+        onClose={() => setLightboxImageId(null)}
+        onIndexChange={(next) => setLightboxImageId(lightboxImages[next]?.id ?? null)}
       />
     </div>
   );

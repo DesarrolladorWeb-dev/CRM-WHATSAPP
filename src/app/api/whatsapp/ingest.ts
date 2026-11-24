@@ -12,9 +12,10 @@ import { DEMO_MODE, dbUnavailableResponse } from '@/lib/demo';
 import { captureException, logger, motivo } from '@/lib/logger';
 import { saveMedia, type SavedMedia } from '@/lib/mediaStorage';
 import type { Contact, Conversation } from '@/types';
-import { requireUserPermission } from '@/lib/auth';
+import { requireWriteAccess } from '@/lib/auth';
 import { formatTimeFromIso } from '@/lib/time';
 import { interactiveToText, parseInteractive } from '@/lib/whatsappInteractive';
+import { getMessageEventDate } from '@/lib/messageOrdering';
 
 // Logica compartida de recepcion de mensajes entrantes de WhatsApp.
 //
@@ -38,6 +39,8 @@ export interface MediaData {
 
 export interface IncomingPayload {
   messageId?: string;
+  channel?: string;
+  origin?: string;
   from?: string;
   fromName?: string;
   timestamp?: number;
@@ -45,12 +48,25 @@ export interface IncomingPayload {
   hasMedia?: boolean;
   mediaType?: MediaType;
   media?: MediaData;
+  /**
+   * URL del binario cuando el servicio ya lo tiene servido (stickers, media
+   * reenviada). Es la alternativa a `media.data`: antes solo se entendia el
+   * base64 y un sticker que llegaba por URL se guardaba sin fuente.
+   */
+  mediaUrl?: string;
+  /**
+   * Metadatos que el servicio de WhatsApp manda junto a `media` (mimetype,
+   * fileName, caption, width, height, seconds). Todo eso ya viaja dentro de
+   * `media`, asi que aqui solo se declara para que el schema `.strict()` no
+   * rechace el webhook con 400.
+   */
+  mediaInfo?: unknown;
   receivedAt?: string;
   // Campos adicionales para LIDs (Linked Identity de WhatsApp)
   isLid?: boolean;
   lidBase?: string;
   resolvedPhone?: string;
-  rawMessage?: any
+  rawMessage?: unknown;
 }
 
 function sanitizeName(raw: string | undefined, fallback: string): string {
@@ -137,6 +153,7 @@ function contactToApi(row: {
   company?: string | null;
   avatarUrl?: string | null;
   avatar?: string;
+  origin?: string | null;
 }): Contact {
   return {
     id: row.id,
@@ -147,6 +164,7 @@ function contactToApi(row: {
     avatar: row.avatarUrl || row.avatar || avatarPara(row.name || row.id, esNombreReal(row.name)),
     handle: row.handle,
     phone: row.phone ?? undefined,
+    origin: row.origin ?? undefined,
     channel: 'whatsapp',
     tags: [],
     sentiment: 'neutral',
@@ -161,17 +179,20 @@ function contactToApi(row: {
 
 /** Valida la credencial del navegador (x-api-key con write) o del webhook (?secret=). */
 export async function authorizeIncoming(req: NextRequest): Promise<NextResponse | null> {
-  const denied = await requireUserPermission(req, 'write');
+  const denied = await requireWriteAccess(req, 'write');
   if (!denied) return null;
 
   const secret = process.env.WHATSAPP_WEBHOOK_SECRET;
   if (secret) {
-    const provided = new URL(req.url).searchParams.get('secret') || '';
-    
+    const provided =
+      req.headers.get('x-n8n-secret') ||
+      new URL(req.url).searchParams.get('secret') ||
+      '';
+
     // Comparar usando hashes para evitar timing attacks y problemas de longitud
     const providedHash = createHash('sha256').update(provided).digest();
     const secretHash = createHash('sha256').update(secret).digest();
-    
+
     if (timingSafeEqual(providedHash, secretHash)) return null;
   }
   return denied;
@@ -209,8 +230,8 @@ export async function handleIncomingPayload(body: IncomingPayload): Promise<Next
 
     const interactive = parseInteractive(body.rawMessage)
     const text = String(body.text || '') || (interactive ? interactiveToText(interactive): '');
-    const receivedAt = body.receivedAt ? new Date(body.receivedAt) : new Date();
-    const timestampLbl = displayTime(body.receivedAt);
+    const messageDate = getMessageEventDate(body.timestamp, body.receivedAt);
+    const timestampLbl = displayTime(messageDate.toISOString());
 
     // Determinar el identificador único del contacto
     // Si es un LID, usar el lidBase como handle único
@@ -284,6 +305,7 @@ export async function handleIncomingPayload(body: IncomingPayload): Promise<Next
         handle: contactHandle,
         phone: contactPhone,
         channel: 'whatsapp',
+        origin: body.origin ?? body.channel,
         sentiment: 'neutral',
         leadScore: 50,
         stage: 'lead',
@@ -296,6 +318,13 @@ export async function handleIncomingPayload(body: IncomingPayload): Promise<Next
       });
       isNewContact = true;
     } else {
+      if (!contact.origin && (body.origin || body.channel)) {
+        await db.contact.update({
+          where: { id: contact.id },
+          data: { origin: body.origin ?? body.channel },
+        });
+        contact.origin = body.origin ?? body.channel ?? null;
+      }
       // Si el contacto ya existe pero no tiene phone y tenemos uno resuelto, actualizarlo
       if (!contact.phone && contactPhone) {
         await db.contact.update({
@@ -353,13 +382,7 @@ export async function handleIncomingPayload(body: IncomingPayload): Promise<Next
       isNewConversation = true;
     }
 
-    // 3. Actualizar el resumen de la conversacion (lastMessage + no leidos).
-    await bumpLastMessage(db, conversation.id, {
-      text: lastMsgText,
-      sender: 'contact',
-    });
-
-    // 4. Mensaje en MongoDB (upsert por id: el polling inicial y el socket
+    // 3. Mensaje en MongoDB (upsert por id: el polling inicial y el socket
     // pueden entregar el mismo messageId dos veces).
     let mongoConnected = false;
     try {
@@ -368,69 +391,126 @@ export async function handleIncomingPayload(body: IncomingPayload): Promise<Next
     } catch {
       mongoConnected = false;
     }
-    let savedMediaUrl: string | undefined;
-    if (mongoConnected) {
-      const updateFields: Record<string, unknown> = {
-        hasMedia: body.hasMedia || false,
-      };
-      
-      if (body.hasMedia && body.mediaType) {
-        updateFields.mediaType = body.mediaType;
-      }
-      
-      if (body.hasMedia && body.media) {
-        const esDataUrl = body.media.data.startsWith('data:');
-        const saved: SavedMedia | null = await saveMedia({
-          conversationId: conversation.id,
-          messageId,
-          dataUrl: esDataUrl ? body.media.data : null,
-          base64: esDataUrl ? null : body.media.data,
-          mimetype: body.media.mimetype,
-        });
 
-        if (saved) {
-          // El binario vive en disco; en Mongo solo queda la URL y los metadatos.
-          updateFields.mediaUrl = saved.url;
-          savedMediaUrl = saved.url;
-          updateFields.media = {
-            mimetype: saved.mimetype,
-            data: '',
-            size: saved.size,
-            filename: body.media.filename,
-            width: body.media.width,
-            height: body.media.height,
-          };
-        } else {
-          // Sin disco disponible: se conserva el base64 inline (legacy).
-          updateFields.media = {
-            mimetype: body.media.mimetype,
-            data: body.media.data,
-            size: body.media.size,
-            filename: body.media.filename,
-            width: body.media.width,
-            height: body.media.height,
-          };
-        }
-      }
-
-      await MessageModel.updateOne(
-        { id: messageId },
+    // Sin Mongo el mensaje no queda guardado. Responder `success: true` hacia
+    // que el cliente lo diera por persistido y no lo reintentara nunca.
+    if (!mongoConnected) {
+      logger.error('MongoDB no disponible: mensaje entrante no guardado', { messageId });
+      return NextResponse.json(
         {
-          $setOnInsert: {
-            id: messageId,
-            conversationId: conversation.id,
-            sender: 'contact',
-            senderName: name,
-            // text,
-            timestamp: timestampLbl,
-            channel: 'whatsapp',
-            status: 'read',
-            createdAt: receivedAt,
-          },
-          $set: {...updateFields, ...(text ? {text}: {}), ...(interactive ? { interactive }: {})},
+          success: false,
+          error: 'MongoDB no disponible: el mensaje entrante no se pudo guardar',
         },
-        { upsert: true }
+        { status: 503 }
       );
+    }
+
+    let savedMediaUrl: string | undefined;
+    // La multimedia puede llegar de dos formas: base64 en `media` (lo normal)
+    // o ya servida por URL (`mediaUrl`, o `media.data` con la URL). Antes solo
+    // se entendia el base64, asi que un sticker que llegaba por URL se guardaba
+    // con hasMedia=false y sin fuente: la burbuja aparecia vacia para siempre.
+    const urlEntrante =
+      urlDeMedia(body.mediaUrl) ||
+      (body.media && esUrlDeMedia(body.media.data) ? urlDeMedia(body.media.data) : undefined);
+
+    const updateFields: Record<string, unknown> = {
+      hasMedia: body.hasMedia || Boolean(urlEntrante) || false,
+    };
+
+    if ((body.hasMedia || urlEntrante) && body.mediaType) {
+      updateFields.mediaType = body.mediaType;
+    }
+
+    if (body.hasMedia && body.media && !esUrlDeMedia(body.media.data)) {
+      const esDataUrl = body.media.data.startsWith('data:');
+      const saved: SavedMedia | null = await saveMedia({
+        conversationId: conversation.id,
+        messageId,
+        dataUrl: esDataUrl ? body.media.data : null,
+        base64: esDataUrl ? null : body.media.data,
+        mimetype: body.media.mimetype,
+      });
+
+      if (saved) {
+        // El binario vive en disco; en Mongo solo queda la URL y los metadatos.
+        updateFields.mediaUrl = saved.url;
+        savedMediaUrl = saved.url;
+        updateFields.media = {
+          mimetype: saved.mimetype,
+          data: '',
+          size: saved.size,
+          filename: body.media.filename,
+          width: body.media.width,
+          height: body.media.height,
+        };
+      } else {
+        // Sin disco disponible: se conserva el base64 inline (legacy).
+        updateFields.media = {
+          mimetype: body.media.mimetype,
+          data: body.media.data,
+          size: body.media.size,
+          filename: body.media.filename,
+          width: body.media.width,
+          height: body.media.height,
+        };
+      }
+    } else if (urlEntrante) {
+      // Sin binario que escribir: se guarda la URL tal cual y, si el servicio
+      // mando metadatos, se conservan para mostrar mimetype/nombre en el chat.
+      updateFields.mediaUrl = urlEntrante;
+      savedMediaUrl = urlEntrante;
+      if (body.media) {
+        updateFields.media = {
+          mimetype: body.media.mimetype,
+          data: '',
+          size: body.media.size,
+          filename: body.media.filename,
+          width: body.media.width,
+          height: body.media.height,
+        };
+      }
+    }
+
+    const upsertResult = await MessageModel.updateOne(
+      { id: messageId },
+      {
+        $setOnInsert: {
+          id: messageId,
+          conversationId: conversation.id,
+          sender: 'contact',
+          senderName: name,
+          // text,
+          timestamp: timestampLbl,
+          channel: 'whatsapp',
+          status: 'read',
+          // La fecha del mensaje es la del EVENTO, no la de insercion: hasta
+          // ahora Mongoose ponia `Date.now()` y un mensaje reprocesado tarde
+          // (buffer, webhook con retraso) aparecia al final del chat.
+          // `timestamps: false` en las opciones impide que Mongoose sustituya
+          // estos valores al construir el upsert.
+          createdAt: messageDate,
+          updatedAt: messageDate,
+        },
+        $set: {
+          ...updateFields,
+          ...(text ? { text } : {}),
+          ...(interactive ? { interactive } : {}),
+        },
+      },
+      { upsert: true, timestamps: false }
+    );
+
+    // 4. Resumen de la conversacion (lastMessage + no leidos): solo cuando el
+    // upsert ha INSERTADO de verdad. El webhook y el socket pueden entregar el
+    // mismo mensaje dos veces; con bumpLastMessage incondicional cada reintento
+    // volvia a sumar un no leido y a reabrir la conversacion.
+    const insertado = upsertResult.upsertedCount === 1;
+    if (insertado) {
+      await bumpLastMessage(db, conversation.id, {
+        text: lastMsgText,
+        sender: 'contact',
+      });
     }
 
     const contactApi = contactToApi(contact);
@@ -439,12 +519,25 @@ export async function handleIncomingPayload(body: IncomingPayload): Promise<Next
       contactId: conversation.contactId,
       contact: contactApi,
       channel: 'whatsapp',
-      unreadCount: (conversation.unreadCount || 0) + 1,
+      // Un reintento del mismo mensaje no sube el contador: ya estaba contado.
+      unreadCount: (conversation.unreadCount || 0) + (insertado ? 1 : 0),
       lastMessage: lastMsgText,
       lastMessageTime: 'Ahora',
       status: conversation.status as Conversation['status'],
       assignedAgent: conversation.assignedAgent,
     };
+
+    // El evento de socket no lleva el binario: si esta peticion no trajo media
+    // pero el mensaje ya esta guardado con fuente (normalmente lo guardo antes
+    // el webhook), se devuelve esa URL. Sin esto la burbuja del sticker o de la
+    // imagen se quedaba vacia hasta recargar la pagina.
+    let mediaUrlRespuesta = savedMediaUrl;
+    if (!mediaUrlRespuesta && body.hasMedia) {
+      const guardado = (await MessageModel.findOne({ id: messageId })
+        .select('mediaUrl')
+        .lean()) as { mediaUrl?: string } | null;
+      mediaUrlRespuesta = guardado?.mediaUrl;
+    }
 
     return NextResponse.json({
       success: true,
@@ -465,7 +558,7 @@ export async function handleIncomingPayload(body: IncomingPayload): Promise<Next
           hasMedia: body.hasMedia || false,
           mediaType: body.mediaType,
           media: body.media,
-          mediaUrl: savedMediaUrl,
+          mediaUrl: mediaUrlRespuesta,
           interactive: interactive ?? undefined
         },
         phone: isLid ? lidBase : phone,
@@ -492,6 +585,28 @@ function getMediaLabel(mediaType?: string): string {
     case 'sticker': return '🏷️ Sticker';
     default: return '📎 Archivo';
   }
+}
+
+/**
+ * Solo se aceptan URLs que un `<img>/<audio>/<video>` pueda cargar: http(s) o
+ * un data URL de imagen/audio/video. Cualquier otro esquema (javascript:,
+ * file:) se descarta para no guardar algo que el navegador ejecutaria o que
+ * nunca cargaria.
+ */
+function urlDeMedia(valor: string | null | undefined): string | undefined {
+  const v = String(valor ?? '').trim();
+  if (!v) return undefined;
+  if (/^https?:\/\//i.test(v) || /^data:(image|audio|video)\//i.test(v)) return v;
+  return undefined;
+}
+
+/**
+ * `media.data` deberia ser base64, pero hay integraciones que meten ahi la URL
+ * ya servida. Se distingue por el prefijo: el base64 nunca empieza por
+ * "http://" ni por "data:".
+ */
+function esUrlDeMedia(valor: string | null | undefined): boolean {
+  return urlDeMedia(valor) !== undefined;
 }
 
 export { sanitizeName, displayTime };

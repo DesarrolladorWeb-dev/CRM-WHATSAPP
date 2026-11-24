@@ -202,6 +202,12 @@ const contactFields = {
     .optional()
     .or(z.literal('')),
   channel: socialChannel.optional(),
+  origin: z
+    .string()
+    .trim()
+    .max(120, 'El origen no puede pasar de 120 caracteres')
+    .transform((valor) => valor || undefined)
+    .optional(),
   // El mismo tope de 60 que impone POST /api/tags. Sin el, crear una etiqueta
   // desde un contacto se llevaba el limite por delante.
   tags: z.array(textoCorto(60, 'Cada etiqueta').min(1)).max(20, 'Un contacto no puede tener mas de 20 etiquetas').optional(),
@@ -531,12 +537,12 @@ const mediaTypeSchema = z.enum(['image', 'audio', 'video', 'document', 'sticker'
 const mediaDataSchema = z.object({
   mimetype: z.string().min(1).max(100),
   data: z.string().min(1),
-  size: z.number().int().min(0).optional(),
+  size: z.number().int().min(0).nullish().transform((valor) => valor ?? undefined),
   // El nombre viaja a la base de datos y se muestra en el chat: sin barras
   // ni rutas, que tampoco sirven para nada ahi.
   filename: z.string().max(200).regex(/^[^/\\]+$/, 'El nombre del archivo no puede contener rutas').nullable().optional(),
-  width: z.number().int().min(0).optional(),
-  height: z.number().int().min(0).optional(),
+  width: z.number().int().min(0).nullish().transform((valor) => valor ?? undefined),
+  height: z.number().int().min(0).nullish().transform((valor) => valor ?? undefined),
 });
 
 // `timestamp` llega como numero desde el servicio, pero n8n lo envia como
@@ -570,6 +576,8 @@ export const incomingPayloadSchema = z
       .max(64)
       .nullish()
       .transform((valor) => valor ?? undefined),
+    channel: z.string().trim().max(120).nullish().transform((valor) => valor || undefined),
+    origin: z.string().trim().max(120).nullish().transform((valor) => valor || undefined),
     // `from` es el JID ("51953123123@s.whatsapp.net" o "273...@lid") o, si
     // no hay JID, un nombre suelto. De ahi viene la confusion historica que
     // hizo que un contacto se llamara "+51 213 123 123".
@@ -603,6 +611,26 @@ export const incomingPayloadSchema = z
     media: mediaDataSchema
       .nullish()
       .transform((valor) => valor ?? undefined),
+    // El servicio de WhatsApp anade `mediaInfo` (mimetype, fileName, caption,
+    // width, height, seconds) junto a `media`, tanto en el webhook como en el
+    // evento de Socket.IO. No aporta nada nuevo: todo eso viaja ya dentro de
+    // `media`. Pero este schema es `.strict()`, y al no estar declarado el
+    // campo, TODOS los mensajes con multimedia acababan en 400 ("Unrecognized
+    // key: mediaInfo") y no se guardaba ni el mensaje ni el archivo. Los de
+    // solo texto se salvaban porque `mediaInfo` es `undefined` y
+    // `JSON.stringify` lo elimina del body.
+    //
+    // `z.unknown()` porque no se inspecciona: se acepta por compatibilidad y
+    // el ingest no lo usa.
+    mediaInfo: z.unknown().optional(),
+    // Algunos mensajes (tipicamente stickers) llegan con el binario ya servido
+    // por URL en vez de base64. Sin declararlo aqui, el campo se descartaba y
+    // el chat pintaba una burbuja vacia.
+    mediaUrl: z
+      .string()
+      .max(2000)
+      .nullish()
+      .transform((valor) => (valor && valor.trim() ? valor.trim() : undefined)),
     receivedAt: z
       .string()
       .max(40)

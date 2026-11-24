@@ -1,10 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { NextRequest, NextResponse } from 'next/server';
 import { authorizeIncoming } from '@/app/api/whatsapp/ingest';
-import { requireUserPermission } from '@/lib/auth';
+import { requireWriteAccess } from '@/lib/auth';
 
 vi.mock('@/lib/auth', () => ({
-  requireUserPermission: vi.fn(),
+  requireWriteAccess: vi.fn(),
 }));
 
 describe('authorizeIncoming', () => {
@@ -23,14 +23,14 @@ describe('authorizeIncoming', () => {
   });
 
   it('a. usuario con permiso -> null, sin mirar el secret', async () => {
-    vi.mocked(requireUserPermission).mockResolvedValue(null);
+    vi.mocked(requireWriteAccess).mockResolvedValue(null);
     const req = new NextRequest('http://localhost/api/incoming');
     const result = await authorizeIncoming(req);
     expect(result).toBeNull();
   });
 
   it('b. sin permiso + ?secret correcto de WHATSAPP_WEBHOOK_SECRET -> null', async () => {
-    vi.mocked(requireUserPermission).mockResolvedValue(deniedResponse);
+    vi.mocked(requireWriteAccess).mockResolvedValue(deniedResponse);
     process.env.WHATSAPP_WEBHOOK_SECRET = 'mi-secreto-super-seguro';
     
     const req = new NextRequest('http://localhost/api/incoming?secret=mi-secreto-super-seguro');
@@ -39,7 +39,7 @@ describe('authorizeIncoming', () => {
   });
 
   it('c. sin permiso + ?secret incorrecto -> devuelve denied', async () => {
-    vi.mocked(requireUserPermission).mockResolvedValue(deniedResponse);
+    vi.mocked(requireWriteAccess).mockResolvedValue(deniedResponse);
     process.env.WHATSAPP_WEBHOOK_SECRET = 'mi-secreto-super-seguro';
     
     const req = new NextRequest('http://localhost/api/incoming?secret=secreto-hackeado');
@@ -48,7 +48,7 @@ describe('authorizeIncoming', () => {
   });
 
   it('d. sin permiso + sin ?secret -> denied', async () => {
-    vi.mocked(requireUserPermission).mockResolvedValue(deniedResponse);
+    vi.mocked(requireWriteAccess).mockResolvedValue(deniedResponse);
     process.env.WHATSAPP_WEBHOOK_SECRET = 'mi-secreto-super-seguro';
     
     const req = new NextRequest('http://localhost/api/incoming');
@@ -57,7 +57,7 @@ describe('authorizeIncoming', () => {
   });
 
   it('e. sin permiso + sin WEBHOOK_SECRET, pero API_MASTER_KEY y ?secret coinciden -> denied (fallback eliminado)', async () => {
-    vi.mocked(requireUserPermission).mockResolvedValue(deniedResponse);
+    vi.mocked(requireWriteAccess).mockResolvedValue(deniedResponse);
     process.env.API_MASTER_KEY = 'master-key';
     
     const req = new NextRequest('http://localhost/api/incoming?secret=master-key');
@@ -66,7 +66,7 @@ describe('authorizeIncoming', () => {
   });
 
   it('f. sin permiso + variable vacia y ?secret vacio -> denied', async () => {
-    vi.mocked(requireUserPermission).mockResolvedValue(deniedResponse);
+    vi.mocked(requireWriteAccess).mockResolvedValue(deniedResponse);
     process.env.WHATSAPP_WEBHOOK_SECRET = '';
     
     const req = new NextRequest('http://localhost/api/whatsapp/incoming?secret=');

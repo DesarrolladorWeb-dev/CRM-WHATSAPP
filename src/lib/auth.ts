@@ -43,18 +43,37 @@ export function extractApiKey(req: NextRequest): string | null {
  */
 const MACHINE_PATHS = [
   '/api/whatsapp/webhook',
+  '/api/whatsapp/incoming',
   '/api/whatsapp/send-media',
   '/api/messages',
 ];
 
-function machineSecret(): string {
-  return process.env.N8N_WEBHOOK_SECRET || process.env.WHATSAPP_WEBHOOK_SECRET || '';
+function machineSecrets(): string[] {
+  // Son dos integraciones distintas (n8n y el servicio de WhatsApp) y pueden
+  // convivir con secretos diferentes. Antes bastaba con definir
+  // N8N_WEBHOOK_SECRET para tapar WHATSAPP_WEBHOOK_SECRET, y el webhook del
+  // servicio (que manda este ultimo) se quedaba con un 401 del proxy.
+  return [process.env.N8N_WEBHOOK_SECRET, process.env.WHATSAPP_WEBHOOK_SECRET]
+    .map((s) => s || '')
+    .filter(Boolean);
 }
 
+/**
+ * Comparacion en tiempo constante (tambien respecto a la longitud).
+ *
+ * No se usa `crypto.timingSafeEqual` porque este modulo se importa desde el
+ * proxy, que corre en Edge Runtime y no tiene el modulo `crypto` de Node. Se
+ * comparan los bytes UTF-8 completos y la diferencia de longitud entra en el
+ * XOR, asi que un secreto mas corto no termina antes que uno mas largo.
+ */
 function safeEqual(a: string, b: string): boolean {
-  if (!a || !b || a.length !== b.length) return false;
-  let diff = 0;
-  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  if (!a || !b) return false;
+  const encoder = new TextEncoder();
+  const x = encoder.encode(a);
+  const y = encoder.encode(b);
+  let diff = x.length ^ y.length;
+  const largo = Math.max(x.length, y.length);
+  for (let i = 0; i < largo; i++) diff |= (x[i] ?? 0) ^ (y[i] ?? 0);
   return diff === 0;
 }
 
@@ -64,12 +83,19 @@ export function isMachineAllowedPath(pathname: string): boolean {
 }
 
 export function isMachineRequest(req: NextRequest): boolean {
-  const secret = machineSecret();
-  if (!secret) return false;
+  const secrets = machineSecrets();
+  if (secrets.length === 0) return false;
   const url = new URL(req.url);
   const provided =
     req.headers.get('x-n8n-secret') || url.searchParams.get('secret') || '';
-  return safeEqual(provided, secret);
+  if (!provided) return false;
+  // Se comparan TODOS los secretos, sin cortocircuito: el tiempo no debe
+  // delatar cual de ellos coincidio.
+  let ok = false;
+  for (const candidate of secrets) {
+    if (safeEqual(provided, candidate)) ok = true;
+  }
+  return ok;
 }
 
 /**

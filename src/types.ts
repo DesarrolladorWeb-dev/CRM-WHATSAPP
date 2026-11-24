@@ -55,6 +55,7 @@ export interface Contact {
   phone?: string;
   email?: string;
   channel: SocialChannel;
+  origin?: string;
   tags: string[];
   sentiment: LeadSentiment;
   leadScore: number; // 0 to 100
@@ -71,6 +72,7 @@ export interface Contact {
 export interface Message {
   id: string;
   conversationId: string;
+  createdAt?: string;
   sender: 'contact' | 'agent' | 'bot';
   senderName?: string;
   text: string;
@@ -106,6 +108,10 @@ export interface Conversation {
   status: 'open' | 'pending' | 'resolved';
   assignedAgent: string;
   summary?: string;
+  // Ultima actualizacion de la conversacion en la base (ISO). La lista la usa
+  // para etiquetar cada chat con su hora real de actividad; `lastMessageTime`
+  // solo queda como respaldo porque historicamente guarda 'Ahora'.
+  updatedAt?: string;
 }
 
 export interface Segment {
