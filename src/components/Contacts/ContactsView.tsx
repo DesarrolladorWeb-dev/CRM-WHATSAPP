@@ -8,7 +8,7 @@ import {
   XCircleIcon
 } from 'lucide-react';
 import { ChevronDown } from 'lucide-react';
-import { Pencil } from 'lucide-react';
+import { Pencil, GripVertical } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
@@ -415,6 +415,14 @@ export const ContactsView: React.FC<ContactsViewProps> = ({
   // En la vista tabla la seleccion es explicita: se activa con el boton
   // "Seleccionar" para no marcar contactos sin querer al hacer clic. El
   // Kanban no lo necesita porque su clic en la tarjeta ya es la accion.
+  // Drag & Drop de tarjetas entre etapas del Kanban
+const [draggedContactId, setDraggedContactId] =
+  useState<string | null>(null);
+
+const [dragOverStage, setDragOverStage] =
+  useState<PipelineStage | null>(null);
+
+const draggedContactRef = useRef<string | null>(null);
   const [tableSelectionMode, setTableSelectionMode] = useState(false);
 
   const handleSaveDealValue = async () => {
@@ -641,7 +649,88 @@ export const ContactsView: React.FC<ContactsViewProps> = ({
   const dragInitialSelectionRef = useRef<Set<string>>(new Set());
   const dragVisitedRef = useRef<Set<string>>(new Set());
   const hasDraggedSelectionRef = useRef(false);
+// Iniciar movimiento de una tarjeta del Kanban
+const handleCardDragStart = (
+  e: React.DragEvent<HTMLElement>,
+  contactId: string
+) => {
+  e.stopPropagation();
 
+  isDraggingSelectionRef.current = false;
+  dragStartContactIdRef.current = null;
+  hasDraggedSelectionRef.current = false;
+
+  draggedContactRef.current = contactId;
+  setDraggedContactId(contactId);
+
+  e.dataTransfer.effectAllowed = 'move';
+  e.dataTransfer.setData('text/plain', contactId);
+  const card = e.currentTarget.closest('[role="checkbox"]');
+
+if (card instanceof HTMLElement) {
+  e.dataTransfer.setDragImage(card, 30, 20);
+}
+};
+
+// Limpiar los estados al finalizar el arrastre
+const handleCardDragEnd = () => {
+  draggedContactRef.current = null;
+  setDraggedContactId(null);
+  setDragOverStage(null);
+};
+
+// Permitir soltar una tarjeta sobre una columna
+const handleStageDragOver = (
+  e: React.DragEvent<HTMLDivElement>,
+  stage: PipelineStage
+) => {
+  const contact = contacts.find(
+    c => c.id === draggedContactRef.current
+  );
+
+  if (!contact || contact.stage === stage) {
+setDragOverStage(null);
+  return;
+}
+
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  setDragOverStage(stage);
+};
+
+// Quitar el resaltado al salir de una columna
+const handleStageDragLeave = (
+  e: React.DragEvent<HTMLDivElement>
+) => {
+  const related = e.relatedTarget;
+
+  if (
+    related instanceof Node &&
+    e.currentTarget.contains(related)
+  ) {
+    return;
+  }
+
+  setDragOverStage(null);
+};
+
+// Mover el contacto a la nueva etapa
+const handleStageDrop = (
+  e: React.DragEvent<HTMLDivElement>,
+  stage: PipelineStage
+) => {
+  e.preventDefault();
+  e.stopPropagation();
+
+  const contactId = draggedContactRef.current;
+  const contact = contacts.find(c => c.id === contactId);
+
+  handleCardDragEnd();
+
+  if (!contact || contact.stage === stage) return;
+
+  onUpdateStage(contact.id, stage);
+};
   // Iniciar el arrastre
   const startContactDrag = (contactId: string) => {
     isDraggingSelectionRef.current = true;
@@ -967,9 +1056,19 @@ const isNewContactFormValid = trimmedName.length > 0;
 
                 return (
                   <div
-                    key={stg.id}
-                    className={`w-72 flex flex-col max-h-full rounded-2xl border ${stg.color} ${stg.bgColor} p-3.5 shrink-0 shadow-sm`}
-                  >
+  key={stg.id}
+  onDragOver={(e) => handleStageDragOver(e, stg.id)}
+  onDragLeave={handleStageDragLeave}
+  onDrop={(e) => handleStageDrop(e, stg.id)}
+  className={`w-72 flex flex-col max-h-full
+    rounded-2xl border ${stg.color} ${stg.bgColor}
+    p-3.5 shrink-0 shadow-sm transition-all duration-200
+    ${
+      dragOverStage === stg.id
+        ? 'ring-2 ring-emerald-500 ring-offset-2 dark:ring-offset-slate-900'
+        : ''
+    }`}
+>
                     {/* Column Header */}
                     <div className="flex items-start justify-between mb-3 px-1">
                       <div>
@@ -1062,13 +1161,36 @@ const isNewContactFormValid = trimmedName.length > 0;
                           }}
 
                           className={`p-2 flex flex-col items-center bg-white dark:bg-slate-800 border rounded-2xl shadow-xs hover:shadow-md space-y-2 cursor-pointer transition-transform active:scale-[0.99] select-none ${
-                            selectedIds.has(contact.id)
-                              ? 'border-emerald-400 dark:border-emerald-500 ring-2 ring-emerald-200 dark:ring-emerald-700/50'
-                              : 'border-slate-200/90 dark:border-slate-700'
-                          }`}
+  selectedIds.has(contact.id)
+    ? 'border-emerald-400 dark:border-emerald-500 ring-2 ring-emerald-200 dark:ring-emerald-700/50'
+    : 'border-slate-200/90 dark:border-slate-700'
+} ${
+  draggedContactId === contact.id
+    ? 'opacity-40'
+    : ''
+}`}
                         >
                             <div className="grid grid-cols-3 items-center w-full mb-1">
-                              <span />
+  <button
+    type="button"
+    draggable
+    onMouseDown={(e) => e.stopPropagation()}
+    onClick={(e) => e.stopPropagation()}
+    onKeyDown={(e) => e.stopPropagation()}
+    onDragStart={(e) => handleCardDragStart(e, contact.id)}
+    onDragEnd={handleCardDragEnd}
+    title="Arrastrar para cambiar de etapa"
+    aria-label={`Arrastrar a ${contact.name} para cambiar de etapa`}
+    className="justify-self-start p-1 rounded-lg
+      cursor-grab active:cursor-grabbing
+      text-slate-400 dark:text-slate-400
+      hover:text-emerald-600
+      dark:hover:text-emerald-400
+      hover:bg-slate-100 dark:hover:bg-slate-700
+      transition-colors"
+  >
+    <GripVertical className="w-4 h-4" />
+  </button>
                               <div className="justify-self-center">
                                 <div className="flex flex-col items-center gap-1">
                                   {getChannelBadge(contact.channel)}
