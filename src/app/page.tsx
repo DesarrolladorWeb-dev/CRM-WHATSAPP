@@ -110,6 +110,7 @@ export default function HomePage() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const pendingStageUpdatesRef = useRef<Set<string>>(new Set());
 
   const [whatsappStatus, setWhatsappStatus] = useState<WhatsappStatus | null>(null);
   const [whatsappError, setWhatsappError] = useState<string | null>(null);
@@ -626,7 +627,7 @@ export default function HomePage() {
         | undefined;
 
         let mensajeFallidoId = newMsg.id;
-        
+
       if (esImagen) {
         resultadoImagen = await sendMediaMessage({
         phone,
@@ -667,7 +668,7 @@ export default function HomePage() {
       } else if (text.trim()) {
         resultadoTexto = await sendTextMessage(phone, text.trim());
         resultado = resultadoTexto;
-      
+
       if (!resultadoTexto.ok) {
         mensajeFallidoId = textMsg.id;
       } else {
@@ -1363,63 +1364,111 @@ export default function HomePage() {
   };
   // Simulate Incoming Message from Social Channels & Trigger AI Auto-Responder
   // Update Contact Stage
-  const handleUpdateContactStage = (contactId: string, newStage: PipelineStage) => {
-    setContacts(prev => prev.map(c => {
-      if (c.id === contactId) {
-        const interactions = { ...(c.interactions || {}) };
-        if (newStage === 'qualified') {
-          interactions.firstReply = true;
-        } else if (newStage === 'negotiation') {
-          interactions.firstReply = true;
-          interactions.appointmentConfirmed = true;
-        } else if (newStage === 'closed_won') {
-          interactions.firstReply = true;
-          interactions.appointmentConfirmed = true;
-          interactions.proposalSent = true;
-          interactions.dealClosed = true;
-        }
-        return { ...c, stage: newStage, interactions };
+  const handleUpdateContactStage = async (
+    contactId: string,
+    newStage: PipelineStage
+  ) => {
+    const contact = contacts.find(c => c.id === contactId);
+
+    if (!contact || contact.stage === newStage) return;
+
+    if (pendingStageUpdatesRef.current.has(contactId)) {
+      setErrorMessage('El cambio de etapa se está guardando. Espera un momento.');
+      return;
+    }
+
+    pendingStageUpdatesRef.current.add(contactId);
+
+    try {
+      const response = await apiFetch('/api/contacts', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: contactId,
+          stage: newStage
+        })
+      });
+
+      const result = await response.json().catch(() => null);
+
+      if (!response.ok || !result?.success) {
+        setErrorMessage(
+          result?.error || 'No se pudo actualizar la etapa del cliente.'
+        );
+        return;
       }
-      return c;
-    }));
 
-    setConversations(prev => prev.map(c => {
-      if (c.contactId === contactId) {
-        const interactions = { ...(c.contact.interactions || {}) };
-        if (newStage === 'qualified') {
-          interactions.firstReply = true;
-        } else if (newStage === 'negotiation') {
-          interactions.firstReply = true;
-          interactions.appointmentConfirmed = true;
-        } else if (newStage === 'closed_won') {
-          interactions.firstReply = true;
-          interactions.appointmentConfirmed = true;
-          interactions.proposalSent = true;
-          interactions.dealClosed = true;
+      setContacts(prev => prev.map(c => {
+        if (c.id === contactId) {
+          const interactions = { ...(c.interactions || {}) };
+
+          if (newStage === 'qualified') {
+            interactions.firstReply = true;
+          } else if (newStage === 'negotiation') {
+            interactions.firstReply = true;
+            interactions.appointmentConfirmed = true;
+          } else if (newStage === 'closed_won') {
+            interactions.firstReply = true;
+            interactions.appointmentConfirmed = true;
+            interactions.proposalSent = true;
+            interactions.dealClosed = true;
+          }
+
+          return { ...c, stage: newStage, interactions };
         }
-        return { ...c, contact: { ...c.contact, stage: newStage, interactions } };
-      }
-      return c;
-    }));
 
-    // Log Webhook event automatically
-    const newLog: WebhookLog = {
-      id: `log_${Date.now()}`,
-      timestamp: new Date().toISOString().replace('T', ' ').substring(0, 19),
-      event: 'lead.stage_updated',
-      statusCode: 200,
-      payload: { contactId, newStage },
-      durationMs: 85
-    };
-    setWebhookLogs(prev => [newLog, ...prev]);
+        return c;
+      }));
 
-    // Persist update
-    apiFetch('/api/contacts', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: contactId, stage: newStage })
-    }).catch(() => null);
+      setConversations(prev => prev.map(c => {
+        if (c.contactId === contactId) {
+          const interactions = { ...(c.contact.interactions || {}) };
+
+          if (newStage === 'qualified') {
+            interactions.firstReply = true;
+          } else if (newStage === 'negotiation') {
+            interactions.firstReply = true;
+            interactions.appointmentConfirmed = true;
+          } else if (newStage === 'closed_won') {
+            interactions.firstReply = true;
+            interactions.appointmentConfirmed = true;
+            interactions.proposalSent = true;
+            interactions.dealClosed = true;
+          }
+
+          return {
+            ...c,
+            contact: {
+              ...c.contact,
+              stage: newStage,
+              interactions
+            }
+          };
+        }
+
+        return c;
+      }));
+
+      const newLog: WebhookLog = {
+        id: `log_${Date.now()}`,
+        timestamp: new Date().toISOString().replace('T', ' ').substring(0, 19),
+        event: 'lead.stage_updated',
+        statusCode: response.status,
+        payload: { contactId, newStage },
+        durationMs: 85
+      };
+
+      setWebhookLogs(prev => [newLog, ...prev]);
+
+    } catch {
+      setErrorMessage(
+        'Error de conexión al actualizar la etapa del cliente. Verifica el cambio antes de volver a intentarlo.'
+      );
+    } finally {
+      pendingStageUpdatesRef.current.delete(contactId);
+    }
   };
+
 
   // Toggle Contact Interaction & Auto-Transition Stages
   const handleToggleContactInteraction = (
